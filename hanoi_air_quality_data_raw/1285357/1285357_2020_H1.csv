@@ -1,0 +1,2 @@
+﻿location_id,sensors_id,location,datetime,lat,lon,parameter,units,value
+1285357,6566240,SPARTAN - Vietnam Acad. Sci.-1255578,2020-06-23 14:00:00+00:00,21.0478,105.8,pm25,µg/m³,5.9
