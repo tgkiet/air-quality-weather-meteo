@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 .env
 .ipynb_checkpoints/
-hanoi_air_quality_history_COMBINED_LONG.csvOpen-Meteo-Dataset/hanoi_air_quality_from04Aug_CAMS_COMBINED.csv
+hanoi_air_quality_history_COMBINED_LONG.csv
+Open-Meteo-Dataset/hanoi_air_quality_from04Aug_CAMS_COMBINED.csv
 Open-Meteo-Dataset/hanoi_weathermeteo_from04Aug_COMBINED.csv
