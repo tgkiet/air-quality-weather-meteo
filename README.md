@@ -5,4 +5,8 @@
 - 2 File data crawl về được và 1 file data gộp lại đã được gitignore do dung lượng quá lớn, nếu cần, hãy liên hệ tôi thông qua gmail:
 giakiettran14102005@gmail.com
 
+
+\Open-Meteo-Dataset\pipelineDataViaSupabase:
+Folder này dùng để thực hiện logic tạo pipeline ETL với DBMS là supabase, và với tương tác như postgresql.
+
 ### CONTACT ME FOR DOCUMENTATION OF DATASET IN THIS PROJECT
