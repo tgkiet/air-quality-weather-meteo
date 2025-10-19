@@ -191,57 +191,83 @@ def fetch_recent_data(stations_df):
 
 def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = None):
     """
-    Ghi DataFrame vào PostgreSQL an toàn và hiệu quả,    
-    Args:
-        engine: SQLAlchemy engine.
-        df: pandas DataFrame cần upsert.
-        table_name: tên bảng đích trong database.
-        pipeline_id: mã định danh pipeline (tùy chọn, chỉ để log).
+    Ghi DataFrame vào PostgreSQL một cách nguyên tử (atomic), an toàn và hiệu quả,
+    sử dụng một transaction duy nhất. Tương thích với Supabase.
     """
     
     if df is None or df.empty:
         logger.warning(" Không có dữ liệu để thực hiện UpSert. Bỏ qua.")
         return
     
-    df.columns = [col.lower() for col in df.columns]
-    temp_table_name = f"temp_{table_name}_{uuid.uuid4().hex[:8]}"
+    # Chuẩn bị tên bảng tạm duy nhất
+    # Bao bọc bằng ngoặc kép để đảm bảo an toàn trong các câu lệnh SQL thô
+    temp_table_name_quoted = f'"temp_{table_name}_{uuid.uuid4().hex[:8]}"'
+    # pandas.to_sql cần tên không có ngoặc kép
+    temp_table_name_unquoted = temp_table_name_quoted.strip('"')
+
     batch_id = pipeline_id or uuid.uuid4().hex[:6]
     logger.info(f" [Pipeline {batch_id}] bắt đầu upsert {len(df)} dòng vào bảng '{table_name}' ...")
     
-    try:
-        with engine.begin() as conn:
-            logger.info(f" A. Ghi dữ liệu vào bảng tạm '{temp_table_name}' ")
-            df.to_sql(
-                temp_table_name, conn,
-                if_exists="replace", index=False,
-                method='multi', chunksize=5000
-            )
-            logger.info(" GHI DỮ LIỆU VÀO BẢNG TẠM THÀNH CÔNG")
-
-            logger.info(" B. Thực thi Upsert...")
-            cols = ", ".join([f'"{c}"' for c in df.columns])
-            upsert_query = f"""
-                INSERT INTO "{table_name}" ({cols})
-                SELECT {cols} FROM "{temp_table_name}"
-                ON CONFLICT (location_id, datetime) DO NOTHING;
-            """
-            retry_execute(conn, upsert_query)
-        logger.info(" ✅ Upsert hoàn tất trong cùng transaction.")
-        
-    except Exception:
-        logger.warning("\n Lỗi trong quá trình Upsert (đã rollback).")
-        import traceback
-        traceback.print_exc()
-    
-    finally:
-        # --- BƯỚC C: DỌN DẸP ---
-        logger.info(f"  -> C. Dọn dẹp bảng tạm '{temp_table_name}' (nếu tồn tại)...")
+    # Mở kết nối một lần duy nhất cho toàn bộ tác vụ
+    with engine.connect() as conn:
         try:
-            with engine.begin() as cleanup_conn:
-                cleanup_conn.execute(text(f'DROP TABLE IF EXISTS "{temp_table_name}";'))
-            logger.info("Dọn dẹp bảng tạm thành công.")
-        except Exception as cleanup_e:
-            logger.warning(f"Cảnh báo: Lỗi khi dọn dẹp bảng tạm: {cleanup_e}")
+            # --- BẮT ĐẦU MỘT TRANSACTION DUY NHẤT ---
+            # Toàn bộ logic nghiệp vụ sẽ nằm trong khối này.
+            # Nó sẽ tự động COMMIT khi kết thúc thành công, hoặc ROLLBACK nếu có lỗi.
+            with conn.begin():
+                
+                # Bước A: Ghi dữ liệu vào bảng tạm
+                logger.info(f"  A. Ghi dữ liệu vào bảng tạm '{temp_table_name_unquoted}'...")
+                df.to_sql(
+                    temp_table_name_unquoted,
+                    conn, # Sử dụng connection của transaction hiện tại
+                    if_exists="replace",
+                    index=False,
+                    method='multi',
+                    chunksize=5000
+                )
+                logger.info("     -> Ghi vào bảng tạm thành công.")
+
+                # Bước B: Thực thi logic Upsert từ bảng tạm
+                logger.info("  B. Thực thi lệnh UPSERT...")
+                
+                # Lấy danh sách cột từ DataFrame để đảm bảo khớp 100%
+                cols_quoted = ", ".join([f'"{c.lower()}"' for c in df.columns])
+                
+                upsert_query = f"""
+                INSERT INTO public."{table_name}" ({cols_quoted})
+                SELECT {cols_quoted} FROM {temp_table_name_quoted}
+                ON CONFLICT (location_id, datetime) DO NOTHING;
+                """
+                
+                # Thực thi truy vấn với cơ chế retry bên trong transaction
+                retry_execute(conn, upsert_query)
+                logger.info("     -> Lệnh Upsert đã được thực thi thành công.")
+
+                # Lưu ý: Bảng tạm (không phải là TEMP TABLE) được tạo trong transaction này
+                # sẽ bị rollback và biến mất nếu transaction thất bại.
+                # Nếu thành công, nó vẫn tồn tại cho đến khi bị dọn dẹp.
+                
+            # Transaction kết thúc, COMMIT đã được gọi tự động.
+            logger.info("  ✅ Giao dịch Upsert hoàn tất và đã được COMMIT.")
+
+        except Exception:
+            # Log lỗi và thông báo về việc rollback tự động
+            logger.error("\n❌ Lỗi trong quá trình Upsert. Transaction đã được tự động ROLLBACK.", exc_info=True)
+
+        finally:
+            # --- BƯỚC C: DỌN DẸP ---
+            # Khối `finally` đảm bảo việc dọn dẹp luôn được thực thi,
+            # dù transaction ở trên thành công hay thất bại.
+            logger.info(f"  -> C. Dọn dẹp bảng tạm {temp_table_name_quoted}...")
+            try:
+                # Thực thi lệnh DROP TABLE trên cùng một connection
+                # Không cần transaction riêng cho lệnh này trong SQLAlchemy 2.x
+                conn.execute(text(f'DROP TABLE IF EXISTS {temp_table_name_quoted};'))
+                conn.commit() # Cần commit tường minh cho lệnh chạy ngoài `with conn.begin()`
+                logger.info("     -> Dọn dẹp bảng tạm thành công.")
+            except Exception as cleanup_e:
+                logger.warning(f"     -> Cảnh báo: Lỗi khi dọn dẹp bảng tạm: {cleanup_e}")
 
     logger.info(f"🏁 [Pipeline {batch_id}] Hoàn tất upsert cho bảng '{table_name}'.\n")
 
