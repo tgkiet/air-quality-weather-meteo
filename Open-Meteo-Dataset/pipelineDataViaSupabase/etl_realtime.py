@@ -244,7 +244,7 @@ def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = No
                 result = conn.execute(text(upsert_query))
                 rows_inserted = result.rowcount
 
-                logger.info(f" -> Lệnh Upsert đã được thực thi thành công, thực sự insert {rows_inserted} dòng.")
+                logger.info(f" -> Lệnh Upsert đã được thực thi. {rows_inserted} dòng mới đã được chèn vào Supabase.")
 
                 # Lưu ý: Bảng tạm (không phải là TEMP TABLE) được tạo trong transaction này
                 # sẽ bị rollback và biến mất nếu transaction thất bại.
@@ -272,7 +272,9 @@ def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = No
                 logger.warning(f"     -> Cảnh báo: Lỗi khi dọn dẹp bảng tạm: {cleanup_e}")
                             
         logger.info(f"🏁 [Pipeline {batch_id}] Hoàn tất upsert cho bảng '{table_name}'.\n")
-
+        
+        # Trả về số dòng đã chèn để hàm chính có thể sử dụng
+        return rows_inserted
 
 # --- 4. Hàm điều phối chính (Main orchestrator function) --- 
 def run_realtime_etl():
@@ -283,6 +285,9 @@ def run_realtime_etl():
     logger.info(f"BẮT ĐẦU ETL PIPELINE LÚC: {datetime.now()}")
     logger.info("==================================================")
     start_time = time.time()
+    
+    # Khởi tạo biến đếm
+    total_rows_inserted = 0
     
     try: 
         # Bước A: Đọc metadata
@@ -300,7 +305,10 @@ def run_realtime_etl():
         logger.info("\n [Bước 3/3] Đang tải dữ liệu lên database...")
         if recent_data_df is not None and not recent_data_df.empty:
             db_engine = get_db_engine()
-            upsert_data(db_engine, recent_data_df, DB_TABLE_NAME)
+            # Lấy số dòng đã chèn từ hàm upsert_data
+            inserted_count = upsert_data(db_engine, recent_data_df, DB_TABLE_NAME)
+            if inserted_count is not None:
+                total_rows_inserted = inserted_count
         else:
             logger.info(" -> Không có dữ liệu mới để tải lên.")
     
@@ -312,6 +320,8 @@ def run_realtime_etl():
         end_time = time.time()
         logger.info("\n==================================================")
         logger.info(f"KẾT THÚC ETL JOB. TỔNG THỜI GIAN: {end_time - start_time:.2f} GIÂY.")
+        # Log ra con số chính xác
+        logger.info(f" -> Đã chèn thành công {total_rows_inserted} bản ghi mới vào '{DB_TABLE_NAME}'.")
         logger.info("==================================================")
     
 #--- 5. Điểm bắt đầu thực thi của script ---
