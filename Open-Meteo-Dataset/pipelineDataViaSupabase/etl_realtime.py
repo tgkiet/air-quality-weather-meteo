@@ -31,7 +31,7 @@ logger = logging.getLogger("etl_realtime")
 
 
 # --- Hằng số toàn cục ---
-METADATA_FILE_PATH = os.path.join(BASE_DIR, "stations_metadata.csv") # Đường dẫn an toàn hơn
+METADATA_FILE_PATH = os.path.join(BASE_DIR, "../stations_metadata.csv") # Đường dẫn an toàn hơn
 DB_TABLE_NAME = "air_quality_forecast_data"
 
 
@@ -234,15 +234,17 @@ def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = No
                 # Lấy danh sách cột từ DataFrame để đảm bảo khớp 100%
                 cols_quoted = ", ".join([f'"{c.lower()}"' for c in df.columns])
                 
+                # Upsert với RETURNING
                 upsert_query = f"""
                 INSERT INTO public."{table_name}" ({cols_quoted})
                 SELECT {cols_quoted} FROM {temp_table_name_quoted}
-                ON CONFLICT (location_id, datetime) DO NOTHING;
+                ON CONFLICT (location_id, datetime) DO NOTHING
+                RETURNING 1;
                 """
-                
-                # Thực thi truy vấn với cơ chế retry bên trong transaction
-                retry_execute(conn, upsert_query)
-                logger.info("     -> Lệnh Upsert đã được thực thi thành công.")
+                result = conn.execute(text(upsert_query))
+                rows_inserted = result.rowcount
+
+                logger.info(f" -> Lệnh Upsert đã được thực thi thành công, thực sự insert {rows_inserted} dòng.")
 
                 # Lưu ý: Bảng tạm (không phải là TEMP TABLE) được tạo trong transaction này
                 # sẽ bị rollback và biến mất nếu transaction thất bại.
@@ -268,8 +270,9 @@ def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = No
                 logger.info("     -> Dọn dẹp bảng tạm thành công.")
             except Exception as cleanup_e:
                 logger.warning(f"     -> Cảnh báo: Lỗi khi dọn dẹp bảng tạm: {cleanup_e}")
+                            
+        logger.info(f"🏁 [Pipeline {batch_id}] Hoàn tất upsert cho bảng '{table_name}'.\n")
 
-    logger.info(f"🏁 [Pipeline {batch_id}] Hoàn tất upsert cho bảng '{table_name}'.\n")
 
 # --- 4. Hàm điều phối chính (Main orchestrator function) --- 
 def run_realtime_etl():
