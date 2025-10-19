@@ -1,7 +1,3 @@
-# Tự động cập nhật dữ liệu mới nhất từ Open-Meteo API và lưu trữ vào Supabase
-# Lịch chạy là mỗi giờ
-
-# --- 1. Import thư viện ---
 import logging
 import random
 import uuid
@@ -35,7 +31,7 @@ METADATA_FILE_PATH = os.path.join(BASE_DIR, "../stations_metadata.csv") # Đư�
 DB_TABLE_NAME = "air_quality_forecast_data"
 
 
-# -- 3. Định nghĩa các hàm chức năng ---
+# -- Định nghĩa các hàm chức năng ---
 
 def get_db_engine():
     """
@@ -276,7 +272,7 @@ def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = No
         # Trả về số dòng đã chèn để hàm chính có thể sử dụng
         return rows_inserted
 
-# --- 4. Hàm điều phối chính (Main orchestrator function) --- 
+# --- Hàm điều phối chính (Main orchestrator function) --- 
 def run_realtime_etl():
     """
     Hàm chính để điều phối quá trình ETL.
@@ -324,6 +320,6 @@ def run_realtime_etl():
         logger.info(f" -> Đã chèn thành công {total_rows_inserted} bản ghi mới vào '{DB_TABLE_NAME}'.")
         logger.info("==================================================")
     
-#--- 5. Điểm bắt đầu thực thi của script ---
+#--- Điểm bắt đầu thực thi của script ---
 if __name__ == "__main__":
     run_realtime_etl()
