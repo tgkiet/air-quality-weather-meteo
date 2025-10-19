@@ -27,10 +27,13 @@ CREATE TABLE public.air_quality_forecast_data (
     sulphur_dioxide_cams REAL,
     ozone_cams REAL,
 
+    -- Toạ độ (mới thêm)
+    lat DOUBLE PRECISION,
+    lon DOUBLE PRECISION,
+
     -- Khoá chính đảm bảo duy nhất cho từng thời điểm & địa điểm
     CONSTRAINT air_quality_forecast_data_pkey PRIMARY KEY (location_id, datetime)
 );
 
--- Bước 3: Thêm chú thích mô tả bảng
 COMMENT ON TABLE public.air_quality_forecast_data IS 
-'Bảng tổng hợp dữ liệu khí tượng và chất lượng không khí (Open-Meteo) cho các địa điểm tại Hà Nội.';
+'Bảng tổng hợp dữ liệu khí tượng + chất lượng không khí (Open-Meteo) cho các địa điểm tại Hà Nội, bao gồm toạ độ lat/lon.';
