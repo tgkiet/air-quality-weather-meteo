@@ -15,15 +15,23 @@ import openmeteo_requests
 from retry_requests import retry
 import time
 
-# --- 1b. Logging setup ---
+# --- Logging setup ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE_PATH = os.path.join(BASE_DIR, "etl_realtime.log")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE_PATH, encoding="utf-8"),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger("etl_realtime")
 
-# --- 2. Định nghĩa các hằng số toàn cục ---
-METADATA_FILE_PATH = "../stations_metadata.csv"
+
+# --- Hằng số toàn cục ---
+METADATA_FILE_PATH = os.path.join(BASE_DIR, "stations_metadata.csv") # Đường dẫn an toàn hơn
 DB_TABLE_NAME = "air_quality_forecast_data"
 
 
@@ -46,26 +54,29 @@ def retry_execute(conn, query, retries=3, delay_base=1.0):
     """
     Thực thi truy vấn sql với cơ chế retry nếu gặp deadlock
     """
+    last_exception = None
     for attempt in range(retries):
         try:
             conn.execute(text(query))
             return
         except Exception as e:
+            last_exception = e
             msg = str(e).lower()
-            if "deadlock detected" in msg or "could not obtain lock" in msg or "serialization failure" in msg:
+            if any(err in msg for err in ["deadlock detected", "could not obtain lock", "serialization failure"]):
                 wait = delay_base * (2 ** attempt) + random.random()
-                print(f"  Phát hiện Deadlock/lock - retry sau {wait:.1f}s (lần {attempt + 1}/{retries})...")
+                logger.warning(f"  Phát hiện Deadlock/lock - retry sau {wait:.1f}s (lần {attempt + 1}/{retries})...")
                 time.sleep(wait)
             else:
+                logger.error(f"Lỗi SQL không thể retry: {e}")
                 raise
-    raise RuntimeError(f"Quá số lần retry do deadlock/lock. Lỗi cuối cùng: {e}")
+    raise RuntimeError(f"Quá số lần retry do deadlock/lock. Lỗi cuối cùng: {last_exception}")
 
 def fetch_recent_data(stations_df):
     """
     Gọi API Open-Meteo để lấy dữ liệu 3 ngày gần nhất.
     Thực hiện hai lệnh gọi API riêng biệt, cả hai đều dùng `past_days`.
     """
-    logger.info("LOG: Bắt đầu hàm fetch_recent_data...")
+    logger.info("Bắt đầu hàm fetch_recent_data...")
     
     retry_session = retry(requests.Session(), retries=5, backoff_factor=0.2)
     openmeteo = openmeteo_requests.Client(session=retry_session)
@@ -106,6 +117,7 @@ def fetch_recent_data(stations_df):
                 freq=pd.Timedelta(seconds=hourly.Interval()),
                 inclusive="left"
             )})
+            
             for i, var_name in enumerate(weather_params["hourly"]):
                 values = hourly.Variables(i).ValuesAsNumpy()
                 df_weather[var_name] = values[:len(df_weather)]
@@ -134,6 +146,7 @@ def fetch_recent_data(stations_df):
                 freq=pd.Timedelta(seconds=hourly.Interval()),
                 inclusive="left"
             )})
+            
             for i, var_name in enumerate(aq_params["hourly"]):
                 values = hourly.Variables(i).ValuesAsNumpy()
                 df_aq[f"{var_name}_cams"] = values[:len(df_aq)]
@@ -143,7 +156,7 @@ def fetch_recent_data(stations_df):
             logger.warning(f"     - Cảnh báo: Lỗi khi lấy dữ liệu CHẤT LƯỢNG KHÔNG KHÍ cho trạm {loc_id}: {e}")
             # Nếu lỗi, chúng ta vẫn có thể có dữ liệu thời tiết
             
-        # === 3. GỘP (MERGE) HAI DATAFRAME LẠI ===
+        # === 3. MERGE HAI DATAFRAME LẠI ===
         # Chỉ gộp nếu có ít nhất một trong hai DataFrame không rỗng
         if not df_weather.empty or not df_aq.empty:
             if not df_weather.empty and not df_aq.empty:
@@ -154,29 +167,31 @@ def fetch_recent_data(stations_df):
                 df_station_combined = df_aq
                 
             df_station_combined['location_id'] = loc_id
+            df_station_combined['lat'] = lat
+            df_station_combined['lon'] = lon
+            
             all_station_dfs.append(df_station_combined)
-            logger.info(f"    -> Thành công. Đã xử lý trạm {loc_id}.")
+            logger.info(f"    -> Thành công. Đã xử lý trạm {loc_id} ({len(df_station_combined)} dòng).")
+
         else:
             logger.warning(f"    -> Thất bại: Không lấy được cả hai loại dữ liệu cho trạm {loc_id}.")
 
 
     if not all_station_dfs:
-        logger.info("LOG: Không lấy được bất kỳ dữ liệu mới nào từ API.")
+        logger.info("Không lấy được bất kỳ dữ liệu mới nào từ API.")
         return None
 
     final_df = pd.concat(all_station_dfs, ignore_index=True)
     
     final_df = final_df[final_df['datetime'] <= datetime.now(timezone.utc)].copy()
     
-    logger.info(f"LOG: Hoàn tất fetch_recent_data. Tổng cộng {len(final_df)} dòng được lấy về.")
+    logger.info(f"Hoàn tất fetch_recent_data. Tổng cộng {len(final_df)} dòng được lấy về.")
     return final_df
         
 
 def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = None):
     """
-    Ghi DataFrame vào PostgreSQL an toàn và hiệu quả,
-    dùng UNLOGGED TABLE tạm, transaction ngắn và cơ chế retry chống deadlock.
-    
+    Ghi DataFrame vào PostgreSQL an toàn và hiệu quả,    
     Args:
         engine: SQLAlchemy engine.
         df: pandas DataFrame cần upsert.
@@ -194,35 +209,24 @@ def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = No
     logger.info(f" [Pipeline {batch_id}] bắt đầu upsert {len(df)} dòng vào bảng '{table_name}' ...")
     
     try:
-        # Bước A: Ghi dữ liệu vào bảng tạm 
         with engine.begin() as conn:
             logger.info(f" A. Ghi dữ liệu vào bảng tạm '{temp_table_name}' ")
             df.to_sql(
-                temp_table_name,
-                conn, 
-                if_exists="replace",
-                index=False,
-                method='multi',
-                chunksize=5000
+                temp_table_name, conn,
+                if_exists="replace", index=False,
+                method='multi', chunksize=5000
             )
             logger.info(" GHI DỮ LIỆU VÀO BẢNG TẠM THÀNH CÔNG")
-            
-        # Bước B: CHUYỂN bảng tạm thành UNLOGGED
-        with engine.begin() as conn:
-            conn.execute(text(f'ALTER TABLE IF EXISTS "{temp_table_name}" SET UNLOGGED;'))
-        logger.info(" Đã chuyển bảng tạm thành UNLOGGED (tăng tốc độ ghi")
-        
-        # Bước C: THỰC THI UPSERT
-        with engine.begin() as conn: 
-            logger.info(" THỰC THI LỆNH UPSERT ")
+
+            logger.info(" B. Thực thi Upsert...")
             cols = ", ".join([f'"{c}"' for c in df.columns])
             upsert_query = f"""
-            INSERT INTO "{table_name}" ({cols})
-            SELECT {cols} FROM "{temp_table_name}"
-            ON CONFLICT (location_id, datetime) DO NOTHING;
+                INSERT INTO "{table_name}" ({cols})
+                SELECT {cols} FROM "{temp_table_name}"
+                ON CONFLICT (location_id, datetime) DO NOTHING;
             """
             retry_execute(conn, upsert_query)
-        logger.info(" ✅ Upsert hoàn tất thành công.")
+        logger.info(" ✅ Upsert hoàn tất trong cùng transaction.")
         
     except Exception:
         logger.warning("\n Lỗi trong quá trình Upsert (đã rollback).")
@@ -230,8 +234,8 @@ def upsert_data(engine, df: pd.DataFrame, table_name: str, pipeline_id: str = No
         traceback.print_exc()
     
     finally:
-        # --- BƯỚC D: DỌN DẸP ---
-        logger.info(f"  -> C. Dọn dẹp bảng tạm '{temp_table_name}'...")
+        # --- BƯỚC C: DỌN DẸP ---
+        logger.info(f"  -> C. Dọn dẹp bảng tạm '{temp_table_name}' (nếu tồn tại)...")
         try:
             with engine.begin() as cleanup_conn:
                 cleanup_conn.execute(text(f'DROP TABLE IF EXISTS "{temp_table_name}";'))
@@ -279,7 +283,6 @@ def run_realtime_etl():
         end_time = time.time()
         logger.info("\n==================================================")
         logger.info(f"KẾT THÚC ETL JOB. TỔNG THỜI GIAN: {end_time - start_time:.2f} GIÂY.")
-        logger.info(f" -> Đã ghi {len(recent_data_df)} bản ghi vào {DB_TABLE_NAME}.")
         logger.info("==================================================")
     
 #--- 5. Điểm bắt đầu thực thi của script ---
