@@ -30,7 +30,7 @@ def run_backfill():
     # GIAI ĐOẠN 2. Extract & Transform: Đọc và chuẩn bị dữ liệu từ file CSV
     print("\n [Buớc 2/4]: Đang đọc và chuẩn bị dữ liệu từ file CSV...")
     
-    historical_csv_file = "openmeteoDatasetCombined.csv"
+    historical_csv_file = "../hanoi_aq_weather_MERGED.csv"
     
     if not os.path.isfile(historical_csv_file):
         raise FileNotFoundError(f"Lỗi: Không tìm thấy file {historical_csv_file}. Vui lòng kiểm tra lại.")
