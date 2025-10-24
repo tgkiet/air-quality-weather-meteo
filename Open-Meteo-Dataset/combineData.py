@@ -212,6 +212,11 @@ def main():
 
         # 11. Lưu file
         print_step(11, "Lưu file CSV")
+        
+        # --- THÊM DÒNG NÀY ĐỂ ĐẢM BẢO 100% LÀ GIỜ VIỆT NAM KHI HIỂN THỊ ---
+        print_info("Chuyển đổi datetime sang múi giờ Asia/Bangkok để lưu file", indent=2)
+        df_final['datetime'] = df_final['datetime'].dt.tz_convert('Asia/Bangkok')
+
         df_final.to_csv(CONFIG['output_file'], index=False, encoding='utf-8-sig')
         print_info(f" Lưu thành công → {CONFIG['output_file']} ({os.path.getsize(CONFIG['output_file'])/1024/1024:.2f} MB)", indent=2)
 
