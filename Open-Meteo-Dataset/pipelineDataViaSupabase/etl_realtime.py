@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 import openmeteo_requests
 from retry_requests import retry
 import time
+from datetime import timezone, timedelta
+
 
 # --- Logging setup ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -99,6 +101,7 @@ def fetch_recent_data(stations_df):
                     "temperature_2m", "relative_humidity_2m", "precipitation", "rain", 
                     "wind_speed_10m", "wind_direction_10m", "pressure_msl", "boundary_layer_height"
                 ],
+                "timezone": "Asia/Bangkok",
                 "past_days": num_past_days,
                 "forecast_days": 1
             }
@@ -113,6 +116,9 @@ def fetch_recent_data(stations_df):
                 freq=pd.Timedelta(seconds=hourly.Interval()),
                 inclusive="left"
             )})
+            
+            # ⚠️ Chuyển UTC → Asia/Bangkok
+            df_weather["datetime"] = df_weather["datetime"].dt.tz_convert("Asia/Bangkok")
             
             for i, var_name in enumerate(weather_params["hourly"]):
                 values = hourly.Variables(i).ValuesAsNumpy()
@@ -129,6 +135,7 @@ def fetch_recent_data(stations_df):
             aq_params = {
                 "latitude": lat, "longitude": lon,
                 "hourly": ["pm10", "pm2_5", "carbon_monoxide", "nitrogen_dioxide", "sulphur_dioxide", "ozone"],
+                "timezone": "Asia/Bangkok",
                 "past_days": num_past_days,
                 "forecast_days": 1
             }
@@ -142,6 +149,9 @@ def fetch_recent_data(stations_df):
                 freq=pd.Timedelta(seconds=hourly.Interval()),
                 inclusive="left"
             )})
+            
+            # ⚠️ Convert về VN timezone
+            df_aq["datetime"] = df_aq["datetime"].dt.tz_convert("Asia/Bangkok")
             
             for i, var_name in enumerate(aq_params["hourly"]):
                 values = hourly.Variables(i).ValuesAsNumpy()
@@ -179,7 +189,11 @@ def fetch_recent_data(stations_df):
 
     final_df = pd.concat(all_station_dfs, ignore_index=True)
     
-    final_df = final_df[final_df['datetime'] <= datetime.now(timezone.utc)].copy()
+    # ⚠️ Lọc theo thời gian hiện tại của VN, không phải UTC
+    vn_tz = timezone(timedelta(hours=7))
+    vn_now = datetime.now(vn_tz)
+    
+    final_df = final_df[final_df["datetime"] <= vn_now].copy()
     
     logger.info(f"Hoàn tất fetch_recent_data. Tổng cộng {len(final_df)} dòng được lấy về.")
     return final_df
