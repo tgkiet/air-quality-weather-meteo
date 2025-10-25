@@ -80,7 +80,7 @@ def fetch_recent_data(stations_df):
     openmeteo = openmeteo_requests.Client(session=retry_session)
 
     all_station_dfs = []
-    num_past_days = 3
+    num_past_days = 7
 
     for index, station in stations_df.iterrows():
         loc_id = station['location_id']
