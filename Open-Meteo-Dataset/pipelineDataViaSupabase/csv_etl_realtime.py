@@ -136,18 +136,36 @@ def append_to_csv(df_new: pd.DataFrame, csv_filepath: str) -> int:
         logger.info("Không có dữ liệu mới để ghi vào CSV. Bỏ qua.")
         return 0
 
+    # --- SỬA LỖI Ở ĐÂY ---
+    # Đảm bảo cột datetime trong dữ liệu mới là kiểu timezone-aware
+    # Điều này đã được làm trong hàm fetch, nhưng để chắc chắn, ta làm lại
+    df_new['datetime'] = pd.to_datetime(df_new['datetime'])
+    if df_new['datetime'].dt.tz is None:
+        # Nếu vì lý do nào đó nó là naive, hãy gán múi giờ
+        df_new['datetime'] = df_new['datetime'].dt.tz_localize('Asia/Bangkok')
+    else:
+        # Nếu đã có múi giờ, hãy chắc chắn nó là Asia/Bangkok
+        df_new['datetime'] = df_new['datetime'].dt.tz_convert('Asia/Bangkok')
+
     # Kiểm tra sự tồn tại của file CSV
     if os.path.exists(csv_filepath):
         logger.info(f"File '{csv_filepath}' đã tồn tại. Đang đọc dữ liệu cũ...")
-        df_old = pd.read_csv(csv_filepath)
-        # Quan trọng: Chuyển đổi cột datetime để có thể gộp và so sánh đúng
-        df_old['datetime'] = pd.to_datetime(df_old['datetime'])
         
-        # Gộp dữ liệu cũ và mới
+        # Đọc dữ liệu cũ và ngay lập tức chuyển đổi cột datetime
+        # parse_dates=['datetime'] giúp pandas tự động nhận dạng và đọc cột này là datetime
+        df_old = pd.read_csv(csv_filepath, parse_dates=['datetime'])
+        
+        # Quan trọng: Gán múi giờ cho dữ liệu cũ để nó đồng bộ với dữ liệu mới
+        if df_old['datetime'].dt.tz is None:
+            df_old['datetime'] = df_old['datetime'].dt.tz_localize('Asia/Bangkok')
+        else:
+            df_old['datetime'] = df_old['datetime'].dt.tz_convert('Asia/Bangkok')
+        
+        # Gộp dữ liệu cũ và mới (bây giờ cả hai đều có kiểu dữ liệu datetime chuẩn)
         combined_df = pd.concat([df_old, df_new], ignore_index=True)
         
         logger.info("Đang loại bỏ các dòng trùng lặp, giữ lại dữ liệu mới nhất...")
-        # Loại bỏ các dòng trùng lặp dựa trên cặp (location_id, datetime)
+        # Lệnh này bây giờ sẽ hoạt động chính xác
         final_df = combined_df.drop_duplicates(subset=['location_id', 'datetime'], keep='last')
         
         rows_added = len(final_df) - len(df_old)
@@ -156,13 +174,11 @@ def append_to_csv(df_new: pd.DataFrame, csv_filepath: str) -> int:
         final_df = df_new
         rows_added = len(final_df)
 
-    # Sắp xếp lại dữ liệu để file luôn có trật tự
     logger.info("Đang sắp xếp lại dữ liệu...")
     final_df = final_df.sort_values(by=['location_id', 'datetime'])
 
-    # Ghi lại toàn bộ dữ liệu đã được cập nhật
     logger.info(f"Đang ghi {len(final_df)} dòng vào '{csv_filepath}'...")
-    final_df.to_csv(csv_filepath, index=False, encoding='utf-8-sig')
+    final_df.to_csv(csv_filepath, index=False, encoding='utf-8-sig', float_format='%.6f')
     
     return rows_added
 
