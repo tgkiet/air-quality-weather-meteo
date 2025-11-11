@@ -42,7 +42,7 @@ def fetch_recent_data(stations_df: pd.DataFrame) -> pd.DataFrame | None:
     openmeteo = openmeteo_requests.Client(session=retry_session)
 
     all_station_dfs = []
-    num_past_days = 6
+    num_past_days = 8
 
     for index, station in stations_df.iterrows():
         loc_id = station['location_id']
