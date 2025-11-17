@@ -722,3 +722,148 @@
 2025-11-10 21:32:23,699 [INFO] KẾT THÚC ETL JOB. TỔNG THỜI GIAN: 30.82 GIÂY.
 2025-11-10 21:32:23,699 [INFO]  -> Đã thêm thành công 5239 bản ghi mới vào 'C:\Users\trank\kiet\Open-Meteo-Dataset\pipelineDataViaSupabase\hanoi_realtime_data_updated.csv'.
 2025-11-10 21:32:23,699 [INFO] ==================================================
+2025-11-17 23:01:22,707 [INFO] ==================================================
+2025-11-17 23:01:22,707 [INFO] BẮT ĐẦU ETL PIPELINE (LƯU RA CSV) LÚC: 2025-11-17 23:01:22.707634
+2025-11-17 23:01:22,707 [INFO] ==================================================
+2025-11-17 23:01:22,707 [INFO] 
+ [Bước 1/3] Đang đọc metadata từ '/home/kiet/gkinhere/air-quality-pipeline/air-quality-weather-meteo/Open-Meteo-Dataset/pipelineDataViaSupabase/../stations_metadata.csv'...
+2025-11-17 23:01:22,709 [INFO]  -> Đọc thành công thông tin của 31 trạm.
+2025-11-17 23:01:22,709 [INFO] 
+ [Bước 2/3] Đang lấy dữ liệu gần đây từ Open-Meteo...
+2025-11-17 23:01:22,709 [INFO] Bắt đầu hàm fetch_recent_data...
+2025-11-17 23:01:22,710 [INFO]   -> Đang xử lý vị trí trạm ID: 2539 cho 8 ngày qua...
+2025-11-17 23:01:23,546 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:24,759 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:24,771 [INFO]     -> Thành công. Đã xử lý trạm 2539 (216 dòng).
+2025-11-17 23:01:24,771 [INFO]   -> Đang xử lý vị trí trạm ID: 7441 cho 8 ngày qua...
+2025-11-17 23:01:24,942 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:25,387 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:25,388 [INFO]     -> Thành công. Đã xử lý trạm 7441 (216 dòng).
+2025-11-17 23:01:25,389 [INFO]   -> Đang xử lý vị trí trạm ID: 1285357 cho 8 ngày qua...
+2025-11-17 23:01:25,561 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:25,791 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:25,792 [INFO]     -> Thành công. Đã xử lý trạm 1285357 (216 dòng).
+2025-11-17 23:01:25,793 [INFO]   -> Đang xử lý vị trí trạm ID: 2161290 cho 8 ngày qua...
+2025-11-17 23:01:25,988 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:26,397 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:26,398 [INFO]     -> Thành công. Đã xử lý trạm 2161290 (216 dòng).
+2025-11-17 23:01:26,405 [INFO]   -> Đang xử lý vị trí trạm ID: 2161291 cho 8 ngày qua...
+2025-11-17 23:01:26,602 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:27,006 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:27,008 [INFO]     -> Thành công. Đã xử lý trạm 2161291 (216 dòng).
+2025-11-17 23:01:27,008 [INFO]   -> Đang xử lý vị trí trạm ID: 2161292 cho 8 ngày qua...
+2025-11-17 23:01:27,216 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:27,626 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:27,628 [INFO]     -> Thành công. Đã xử lý trạm 2161292 (216 dòng).
+2025-11-17 23:01:27,628 [INFO]   -> Đang xử lý vị trí trạm ID: 2161293 cho 8 ngày qua...
+2025-11-17 23:01:27,831 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:28,240 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:28,242 [INFO]     -> Thành công. Đã xử lý trạm 2161293 (216 dòng).
+2025-11-17 23:01:28,242 [INFO]   -> Đang xử lý vị trí trạm ID: 2161294 cho 8 ngày qua...
+2025-11-17 23:01:28,445 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:28,822 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:28,823 [INFO]     -> Thành công. Đã xử lý trạm 2161294 (216 dòng).
+2025-11-17 23:01:28,824 [INFO]   -> Đang xử lý vị trí trạm ID: 2161295 cho 8 ngày qua...
+2025-11-17 23:01:29,059 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:29,469 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:29,470 [INFO]     -> Thành công. Đã xử lý trạm 2161295 (216 dòng).
+2025-11-17 23:01:29,470 [INFO]   -> Đang xử lý vị trí trạm ID: 2161296 cho 8 ngày qua...
+2025-11-17 23:01:29,673 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:29,903 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:29,905 [INFO]     -> Thành công. Đã xử lý trạm 2161296 (216 dòng).
+2025-11-17 23:01:29,905 [INFO]   -> Đang xử lý vị trí trạm ID: 2161298 cho 8 ngày qua...
+2025-11-17 23:01:30,075 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:30,499 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:30,500 [INFO]     -> Thành công. Đã xử lý trạm 2161298 (216 dòng).
+2025-11-17 23:01:30,500 [INFO]   -> Đang xử lý vị trí trạm ID: 2161299 cho 8 ngày qua...
+2025-11-17 23:01:30,698 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:31,062 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:31,063 [INFO]     -> Thành công. Đã xử lý trạm 2161299 (216 dòng).
+2025-11-17 23:01:31,063 [INFO]   -> Đang xử lý vị trí trạm ID: 2161300 cho 8 ngày qua...
+2025-11-17 23:01:31,312 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:31,655 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:31,656 [INFO]     -> Thành công. Đã xử lý trạm 2161300 (216 dòng).
+2025-11-17 23:01:31,663 [INFO]   -> Đang xử lý vị trí trạm ID: 2161301 cho 8 ngày qua...
+2025-11-17 23:01:31,927 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:32,162 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:32,164 [INFO]     -> Thành công. Đã xử lý trạm 2161301 (216 dòng).
+2025-11-17 23:01:32,164 [INFO]   -> Đang xử lý vị trí trạm ID: 2161303 cho 8 ngày qua...
+2025-11-17 23:01:32,335 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:32,746 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:32,747 [INFO]     -> Thành công. Đã xử lý trạm 2161303 (216 dòng).
+2025-11-17 23:01:32,747 [INFO]   -> Đang xử lý vị trí trạm ID: 2161304 cho 8 ngày qua...
+2025-11-17 23:01:32,951 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:33,360 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:33,362 [INFO]     -> Thành công. Đã xử lý trạm 2161304 (216 dòng).
+2025-11-17 23:01:33,362 [INFO]   -> Đang xử lý vị trí trạm ID: 2161306 cho 8 ngày qua...
+2025-11-17 23:01:33,565 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:33,975 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:33,977 [INFO]     -> Thành công. Đã xử lý trạm 2161306 (216 dòng).
+2025-11-17 23:01:33,977 [INFO]   -> Đang xử lý vị trí trạm ID: 2161307 cho 8 ngày qua...
+2025-11-17 23:01:34,179 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:34,574 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:34,576 [INFO]     -> Thành công. Đã xử lý trạm 2161307 (216 dòng).
+2025-11-17 23:01:34,576 [INFO]   -> Đang xử lý vị trí trạm ID: 2161308 cho 8 ngày qua...
+2025-11-17 23:01:34,794 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:35,008 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:35,009 [INFO]     -> Thành công. Đã xử lý trạm 2161308 (216 dòng).
+2025-11-17 23:01:35,010 [INFO]   -> Đang xử lý vị trí trạm ID: 2161309 cho 8 ngày qua...
+2025-11-17 23:01:35,203 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:35,421 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:35,422 [INFO]     -> Thành công. Đã xử lý trạm 2161309 (216 dòng).
+2025-11-17 23:01:35,422 [INFO]   -> Đang xử lý vị trí trạm ID: 2161313 cho 8 ngày qua...
+2025-11-17 23:01:35,615 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:36,023 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:36,024 [INFO]     -> Thành công. Đã xử lý trạm 2161313 (216 dòng).
+2025-11-17 23:01:36,024 [INFO]   -> Đang xử lý vị trí trạm ID: 2161314 cho 8 ngày qua...
+2025-11-17 23:01:36,230 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:36,576 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:36,578 [INFO]     -> Thành công. Đã xử lý trạm 2161314 (216 dòng).
+2025-11-17 23:01:36,578 [INFO]   -> Đang xử lý vị trí trạm ID: 2161315 cho 8 ngày qua...
+2025-11-17 23:01:36,842 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:37,138 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:37,139 [INFO]     -> Thành công. Đã xử lý trạm 2161315 (216 dòng).
+2025-11-17 23:01:37,140 [INFO]   -> Đang xử lý vị trí trạm ID: 2161316 cho 8 ngày qua...
+2025-11-17 23:01:37,456 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:37,674 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:37,676 [INFO]     -> Thành công. Đã xử lý trạm 2161316 (216 dòng).
+2025-11-17 23:01:37,676 [INFO]   -> Đang xử lý vị trí trạm ID: 2161318 cho 8 ngày qua...
+2025-11-17 23:01:37,866 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:38,138 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:38,140 [INFO]     -> Thành công. Đã xử lý trạm 2161318 (216 dòng).
+2025-11-17 23:01:38,140 [INFO]   -> Đang xử lý vị trí trạm ID: 2161320 cho 8 ngày qua...
+2025-11-17 23:01:38,480 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:38,890 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:38,891 [INFO]     -> Thành công. Đã xử lý trạm 2161320 (216 dòng).
+2025-11-17 23:01:38,891 [INFO]   -> Đang xử lý vị trí trạm ID: 2161321 cho 8 ngày qua...
+2025-11-17 23:01:39,066 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:39,299 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:39,301 [INFO]     -> Thành công. Đã xử lý trạm 2161321 (216 dòng).
+2025-11-17 23:01:39,301 [INFO]   -> Đang xử lý vị trí trạm ID: 2161322 cho 8 ngày qua...
+2025-11-17 23:01:39,498 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:39,708 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:39,710 [INFO]     -> Thành công. Đã xử lý trạm 2161322 (216 dòng).
+2025-11-17 23:01:39,710 [INFO]   -> Đang xử lý vị trí trạm ID: 4946811 cho 8 ngày qua...
+2025-11-17 23:01:39,879 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:40,119 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:40,120 [INFO]     -> Thành công. Đã xử lý trạm 4946811 (216 dòng).
+2025-11-17 23:01:40,120 [INFO]   -> Đang xử lý vị trí trạm ID: 4946812 cho 8 ngày qua...
+2025-11-17 23:01:40,324 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:40,734 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:40,736 [INFO]     -> Thành công. Đã xử lý trạm 4946812 (216 dòng).
+2025-11-17 23:01:40,736 [INFO]   -> Đang xử lý vị trí trạm ID: 4946813 cho 8 ngày qua...
+2025-11-17 23:01:40,938 [INFO]    - Lấy dữ liệu thời tiết thành công.
+2025-11-17 23:01:41,151 [INFO]      - Lấy dữ liệu chất lượng không khí thành công.
+2025-11-17 23:01:41,152 [INFO]     -> Thành công. Đã xử lý trạm 4946813 (216 dòng).
+2025-11-17 23:01:41,155 [INFO] Hoàn tất fetch_recent_data. Tổng cộng 6696 dòng được lấy về.
+2025-11-17 23:01:41,155 [INFO] 
+ [Bước 3/3] Đang ghi/cập nhật dữ liệu vào file CSV...
+2025-11-17 23:01:41,161 [INFO] File '/home/kiet/gkinhere/air-quality-pipeline/air-quality-weather-meteo/Open-Meteo-Dataset/pipelineDataViaSupabase/hanoi_realtime_data_updated.csv' đã tồn tại. Đang đọc dữ liệu cũ...
+2025-11-17 23:01:41,312 [INFO] Đang loại bỏ các dòng trùng lặp, giữ lại dữ liệu mới nhất...
+2025-11-17 23:01:41,323 [INFO] Đang sắp xếp lại dữ liệu...
+2025-11-17 23:01:41,326 [INFO] Đang ghi 21576 dòng vào '/home/kiet/gkinhere/air-quality-pipeline/air-quality-weather-meteo/Open-Meteo-Dataset/pipelineDataViaSupabase/hanoi_realtime_data_updated.csv'...
+2025-11-17 23:01:41,753 [INFO] 
+==================================================
+2025-11-17 23:01:41,753 [INFO] KẾT THÚC ETL JOB. TỔNG THỜI GIAN: 19.05 GIÂY.
+2025-11-17 23:01:41,753 [INFO]  -> Đã thêm thành công 5270 bản ghi mới vào '/home/kiet/gkinhere/air-quality-pipeline/air-quality-weather-meteo/Open-Meteo-Dataset/pipelineDataViaSupabase/hanoi_realtime_data_updated.csv'.
+2025-11-17 23:01:41,753 [INFO] ==================================================
