@@ -10,3 +10,6 @@ giakiettran14102005@gmail.com
 Folder này dùng để thực hiện logic tạo pipeline ETL.
 
 ### CONTACT ME FOR DOCUMENTATION OF DATASET IN THIS PROJECT
+
+----------------------------------------------------------------
+# THỰC HIỆN XÂY DỰNG PIPELINE END-TO-END HOÀN CHỈNH CHO DỰ ÁN NÀY
