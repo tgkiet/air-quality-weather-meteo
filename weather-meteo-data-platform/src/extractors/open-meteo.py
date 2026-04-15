@@ -5,7 +5,7 @@ class OpenMeteoExtractor:
     def __init__(self, url: str):
         self.url = url
     
-    def get_air_quality_data(self, params: dict):
+    def get_open_meteo_data(self, params: dict):
         max_retries = 3
         retry_delay = 5  # seconds
         for i in range(max_retries):
@@ -29,5 +29,5 @@ if __name__ == "__main__":
         }
     
     extractor = OpenMeteoExtractor(url)
-    data = extractor.get_air_quality_data(params)
+    data = extractor.get_open_meteo_data(params)
     print(data)
