@@ -6,9 +6,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from src.extractors.open_meteo import OpenMeteoExtractor
 from src.loaders.postgres_loader import PostgresLoader
+from src.utils.logger import get_logger
+
+logger = get_logger("MainPipeline")
 
 def main():
-    print("--- Bắt đầu chạy luồng ELT ở Local ---")
+    logger.info("--- Bắt đầu chạy luồng ELT ở Local ---")
     
     # EXTRACT (Lấy cả Thời tiết & Chất lượng không khí)
     
@@ -29,32 +32,32 @@ def main():
         "timezone": "Asia/Bangkok",
     }
     
-    print("1. Đang lấy dữ liệu Thời Tiết từ Open-Meteo API...")
+    logger.info("1. Đang lấy dữ liệu Thời Tiết từ Open-Meteo API...")
     weather_extractor = OpenMeteoExtractor(weather_url)
     try:
         weather_data = weather_extractor.get_open_meteo_data(weather_params)
-        print("-> Lấy dữ liệu Thời Tiết thành công!")
+        logger.info("-> Lấy dữ liệu Thời Tiết thành công!")
     except Exception as e:
-        print(f"-> Lỗi khi Extract Thời Tiết: {e}")
+        logger.error(f"-> Lỗi khi Extract Thời Tiết: {e}")
         return
 
-    print("2. Đang lấy dữ liệu Chất lượng không khí từ Open-Meteo API...")
+    logger.info("2. Đang lấy dữ liệu Chất lượng không khí từ Open-Meteo API...")
     aq_extractor = OpenMeteoExtractor(aq_url)
     try:
         aq_data = aq_extractor.get_open_meteo_data(aq_params)
-        print("-> Lấy dữ liệu Chất Lượng Không Khí thành công!")
+        logger.info("-> Lấy dữ liệu Chất Lượng Không Khí thành công!")
     except Exception as e:
-        print(f"-> Lỗi khi Extract Chất lượng không khí: {e}")
+        logger.error(f"-> Lỗi khi Extract Chất lượng không khí: {e}")
         return
 
     # LOAD (Đẩy cả 2 cục dữ liệu vào DB)
-    print("\n3. Đang đẩy dữ liệu vào PostgreSQL...")
+    logger.info("\n3. Đang đẩy dữ liệu vào PostgreSQL...")
     loader = PostgresLoader()
     try:
         loader.connect()
         
         # Đẩy dữ liệu thời tiết
-        print("-> Đang Load dữ liệu Thời Tiết...")
+        logger.info("-> Đang Load dữ liệu Thời Tiết...")
         loader.insert_data(
             table_name="api_openmeteo_raw_data", 
             source_type="weather_forecast_hourly", 
@@ -62,18 +65,18 @@ def main():
         )
         
         # Đẩy dữ liệu chất lượng không khí
-        print("-> Đang Load dữ liệu Chất lượng không khí...")
+        logger.info("-> Đang Load dữ liệu Chất lượng không khí...")
         loader.insert_data(
             table_name="api_openmeteo_raw_data", 
             source_type="air_quality_hourly", 
             raw_json=aq_data
         )
     except Exception as e:
-        print(f"-> Lỗi khi Load: {e}")
+        logger.error(f"-> Lỗi khi Load: {e}")
     finally:
         loader.close()
 
-    print("\n--- Hoàn thành luồng ELT ---")
+    logger.info("\n--- Hoàn thành luồng ELT ---")
 
 if __name__ == "__main__":
     main()
