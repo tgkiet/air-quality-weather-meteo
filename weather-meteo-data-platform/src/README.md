@@ -1,19 +1,19 @@
-# ⚙️ Source Code (Extract & Load Layer)
+# Source Code (Extract & Load Layer)
 
 Thư mục `src/` chứa toàn bộ logic lập trình bằng Python để thực hiện **Bước E (Extract)** và **Bước L (Load)** trong mô hình ELT. Các module ở đây được viết theo hướng OOP (Lập trình hướng đối tượng), đảm bảo tính tái sử dụng và độc lập hoàn toàn với Airflow.
 
-## 📂 Kiến Trúc Bên Trong
-- 📁 **`extractors/`**: 
+## Kiến Trúc Bên Trong
+- **`extractors/`**: 
   - Đảm nhận nhiệm vụ **Extract**.
   - `open_meteo.py`: Chứa class `OpenMeteoExtractor` chuyên kết nối và kéo dữ liệu JSON từ các endpoint của Open-Meteo (Weather API và Air Quality API) kèm theo cơ chế retry nếu lỗi.
-- 📁 **`loaders/`**: 
+- **`loaders/`**: 
   - Đảm nhận nhiệm vụ **Load**.
   - `postgres_loader.py`: Chứa class `PostgresLoader` quản lý kết nối an toàn với PostgreSQL và thực hiện lệnh `INSERT INTO` để nhét cục raw JSON vào Database một cách an toàn.
-- 📁 **`scripts/`**: 
+- **`scripts/`**: 
   - Chứa các đoạn script setup ban đầu (ví dụ: `init_raw_tables.sql` để tạo bảng raw trên PostgreSQL).
-- 📁 **`utils/`**: 
+- **`utils/`**: 
   - Chứa các hàm tiện ích dùng chung (hiện tại chưa dùng, dự phòng cho tương lai: logger, timezone parser, v.v).
-- 📄 **`main.py`**:
+- **`main.py`**:
   - Entrypoint chạy độc lập. Nó đóng vai trò "dán keo" Lớp Extract và Lớp Load lại với nhau để bạn có thể chạy thử nghiệm ở Local mà không cần Airflow.
 
 ## Luồng Dữ Liệu (Data Flow):
