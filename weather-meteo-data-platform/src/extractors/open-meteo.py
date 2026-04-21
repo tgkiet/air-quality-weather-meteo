@@ -18,14 +18,14 @@ class OpenMeteoExtractor:
                 time.sleep(retry_delay)
         raise Exception(f"Failed to fetch data after {max_retries} attempts")
     
-# Example usage:
+# Example weather & meteo usage:
 if __name__ == "__main__":
     # url = "https://archive-api.open-meteo.com/v1/archive"
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
             "latitude": 10.7756, "longitude": 106.7019, # Vị trí của TP.HCM
             "current_weather": "true",
-            "timezone": "Asia/Bangkok", # Check xem co can timezone khong
+            "timezone": "Asia/Bangkok",
         }
     
     extractor = OpenMeteoExtractor(url)
