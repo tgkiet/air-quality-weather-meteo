@@ -37,16 +37,21 @@ class PostgresLoader:
         
         raise Exception(f"Failed to connect to PostgreSQL database after {max_retries} attempts")
     
-    def insert_data(self, source_type, raw_json):
+    def insert_data(self, table_name, source_type, raw_json):
         try:
-            cursor = self.connection.cursor() # hàm này dùng để tạo một con trỏ (cursor) để thực hiện các lệnh SQL trên DB 
-            insert_query = "INSERT INTO api_openmeteo_raw_data (source_type, raw_json) VALUES (%s, %s)"
-            json_string = json.dumps(raw_json) # chuyển đổi thành một chuỗi JSON
-            cursor.execute(insert_query, (source_type, json_string)) # thực thi câu lệnh SQL với các giá trị được cung cấp
-            self.connection.commit() # lưu các thay đổi vào cơ sở dữ liệu
-            cursor.close() # đóng cursor sau khi hoàn thành
+            cursor = self.connection.cursor()
+            # Dùng string formatting an toàn hoặc %s cho table name 
+            insert_query = f"INSERT INTO {table_name} (source_type, raw_json) VALUES (%s, %s)"
+            json_string = json.dumps(raw_json)
+            cursor.execute(insert_query, (source_type, json_string))
+            self.connection.commit()
+            cursor.close()
+            print(f"Successfully inserted data into {table_name}")
         except Exception as e:
-            print(f"Error inserting data into PostgreSQL database: {e}")
-            self.connection.rollback() # nếu có lỗi, hoàn tác các thay đổi đã thực hiện
+            print(f"Error inserting data into {table_name}: {e}")
+            self.connection.rollback()
             
-            
+    def close(self):
+        if self.connection:
+            self.connection.close()
+            print("PostgreSQL connection closed.")
