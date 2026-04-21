@@ -1,1 +1,0 @@
-Folder chứa các script thực hiện các tác vụ crawl data, config kết nối Postgres
