@@ -2,7 +2,11 @@ import json
 import os
 import time
 import psycopg2
+from psycopg2 import sql
 from dotenv import load_dotenv
+from src.utils.logger import get_logger
+
+logger = get_logger("PostgresLoader")
 
 class PostgresLoader:
     def __init__(self):
@@ -19,7 +23,7 @@ class PostgresLoader:
         max_retries = 3
         retry_delay = 5  # seconds
         for i in range(max_retries):
-            print(f"Connecting to PostgreSQL database (Attempt {i+1}/{max_retries})...")
+            logger.info(f"Connecting to PostgreSQL database (Attempt {i+1}/{max_retries})...")
             try:
                 conn = psycopg2.connect(
                     dbname = self.db_name,
@@ -28,30 +32,33 @@ class PostgresLoader:
                     host = self.db_host,
                     port = self.db_port
                 )
-                print("Connection successful!")
+                logger.info("Connection successful!")
                 self.connection = conn # Store the connection for later use
                 return conn
             except Exception as e:
-                print(f"Error connecting to PostgreSQL database: {e} (Attempt {i+1} of {max_retries})")
+                logger.warning(f"Error connecting to PostgreSQL database: {e} (Attempt {i+1} of {max_retries})")
                 time.sleep(retry_delay)
         
+        logger.error(f"Failed to connect to PostgreSQL database after {max_retries} attempts")
         raise Exception(f"Failed to connect to PostgreSQL database after {max_retries} attempts")
     
     def insert_data(self, table_name, source_type, raw_json):
         try:
             cursor = self.connection.cursor()
-            # Dùng string formatting an toàn hoặc %s cho table name 
-            insert_query = f"INSERT INTO {table_name} (source_type, raw_json) VALUES (%s, %s)"
+            # Sử dụng psycopg2.sql.Identifier để CHỐNG SQL Injection hoàn toàn cho table_name
+            insert_query = sql.SQL("INSERT INTO {} (source_type, raw_json) VALUES (%s, %s)").format(
+                sql.Identifier(table_name)
+            )
             json_string = json.dumps(raw_json)
             cursor.execute(insert_query, (source_type, json_string))
             self.connection.commit()
             cursor.close()
-            print(f"Successfully inserted data into {table_name}")
+            logger.info(f"Successfully inserted {source_type} data into {table_name}")
         except Exception as e:
-            print(f"Error inserting data into {table_name}: {e}")
+            logger.error(f"Error inserting {source_type} data into {table_name}: {e}")
             self.connection.rollback()
             
     def close(self):
         if self.connection:
             self.connection.close()
-            print("PostgreSQL connection closed.")
+            logger.info("PostgreSQL connection closed.")

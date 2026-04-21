@@ -1,5 +1,8 @@
 import requests
 import time
+from src.utils.logger import get_logger
+
+logger = get_logger("OpenMeteoExtractor")
 
 class OpenMeteoExtractor:
     def __init__(self, url: str):
@@ -14,8 +17,10 @@ class OpenMeteoExtractor:
                 response.raise_for_status() #check status 
                 return response.json() # dua vao {}, ma python tu ep kieu tu json sang dict
             except Exception as e:
-                print(f"Error fetching data: {e}")
+                logger.warning(f"Error fetching data: {e} (Attempt {i+1} of {max_retries})")
                 time.sleep(retry_delay)
+        
+        logger.error(f"Failed to fetch data from {self.url} after {max_retries} attempts")
         raise Exception(f"Failed to fetch data after {max_retries} attempts")
     
 # Example weather & meteo usage:

@@ -8,11 +8,12 @@ Thư mục `src/` chứa toàn bộ logic lập trình bằng Python để thự
   - `open_meteo.py`: Chứa class `OpenMeteoExtractor` chuyên kết nối và kéo dữ liệu JSON từ các endpoint của Open-Meteo (Weather API và Air Quality API) kèm theo cơ chế retry nếu lỗi.
 - **`loaders/`**: 
   - Đảm nhận nhiệm vụ **Load**.
-  - `postgres_loader.py`: Chứa class `PostgresLoader` quản lý kết nối an toàn với PostgreSQL và thực hiện lệnh `INSERT INTO` để nhét cục raw JSON vào Database một cách an toàn.
+  - `postgres_loader.py`: Chứa class `PostgresLoader` quản lý kết nối an toàn với PostgreSQL và thực hiện lệnh `INSERT INTO` để nhét cục raw JSON vào Database. Nó sử dụng `psycopg2.sql` để **ngăn chặn hoàn toàn lỗi bảo mật SQL Injection** khi truyền tên bảng.
 - **`scripts/`**: 
   - Chứa các đoạn script setup ban đầu (ví dụ: `init_raw_tables.sql` để tạo bảng raw trên PostgreSQL).
 - **`utils/`**: 
-  - Chứa các hàm tiện ích dùng chung (hiện tại chưa dùng, dự phòng cho tương lai: logger, timezone parser, v.v).
+  - Chứa các hàm tiện ích dùng chung cho toàn bộ pipeline.
+  - `logger.py`: Cung cấp class Logger được chuẩn hoá, giúp ghi log tất cả hoạt động ra màn hình console và đồng thời lưu vào file `logs/pipeline.log`. Mọi sự cố và thao tác đều được lưu vết chi tiết.
 - **`main.py`**:
   - Entrypoint chạy độc lập. Nó đóng vai trò "dán keo" Lớp Extract và Lớp Load lại với nhau để bạn có thể chạy thử nghiệm ở Local mà không cần Airflow.
 
