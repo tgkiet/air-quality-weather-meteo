@@ -19,12 +19,11 @@ services:
 
   airflow:
     container_name: airflow_container
-    image: apache/airflow:3.2.0
+    build: .
     ports:
       - "8080:8080"
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_USER}:${AIRFLOW_PASSWORD}@postgres_db:5432/${AIRFLOW_DB}
-      # _PIP_ADDITIONAL_REQUIREMENTS: python-dotenv requests
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
