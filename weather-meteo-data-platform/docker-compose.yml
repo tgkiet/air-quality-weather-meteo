@@ -24,9 +24,12 @@ services:
       - "8080:8080"
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_USER}:${AIRFLOW_PASSWORD}@postgres_db:5432/${AIRFLOW_DB}
+      # _PIP_ADDITIONAL_REQUIREMENTS: python-dotenv requests
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
+      - ./src:/opt/airflow/src
+      - ./.env:/opt/airflow/.env
     depends_on:
       - postgres_db
     networks:
