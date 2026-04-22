@@ -15,11 +15,35 @@ Thư mục này là **trái tim** của toàn bộ hệ thống xử lý dữ li
 3. [`dbt-transform/`](./dbt-transform/): Chứa dự án `dbt`. Làm nhiệm vụ **Transform**: query vào bảng raw JSON trong PostgreSQL để bóc tách, làm sạch (Staging) và thiết kế bảng phân tích (Marts).
 
 ## Hướng Dẫn Chạy (Quick Start)
-### Chạy test ở Local (Chỉ Extract và Load)
-Nếu chỉ muốn thử nghiệm việc lấy dữ liệu và lưu vào DB mà không cần bật Airflow:
+
+### 1. Chuẩn bị biến môi trường
+Tạo file `.env` tại thư mục này với nội dung sau:
+```env
+POSTGRES_USER=your_user
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=air_quality_db
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5434
+
+AIRFLOW_USER=airflow_user
+AIRFLOW_PASSWORD=airflow_password
+AIRFLOW_DB=airflow_db
+```
+
+### 2. Khởi chạy toàn bộ hệ thống bằng Docker
+Bạn chỉ cần gõ lệnh sau để dựng PostgreSQL và Airflow lên:
 ```bash
-# 1. Khởi tạo Database (đảm bảo bảng api_openmeteo_raw_data đã được tạo)
-# 2. Chạy pipeline:
+docker compose up -d
+```
+*Lưu ý: Trong lần khởi chạy đầu tiên, Postgres sẽ tự động tạo ra cả `air_quality_db` và `airflow_db` dựa trên file script `src/scripts/init_dbs.sh`.*
+
+### 3. Đăng nhập Airflow
+- Truy cập trình duyệt: `http://localhost:8080`
+- **Username:** `admin`
+- **Password:** Lấy từ log của Airflow container (`docker logs airflow_container | grep Password`) hoặc file `standalone_admin_password.txt`.
+
+### 4. Chạy Test Local (Không dùng Airflow)
+Nếu bạn muốn debug trực tiếp quá trình Extract và Load:
+```bash
 python src/main.py
 ```
-*(đã cấu hình các biến môi trường trong file `.env`) chưa???*

@@ -20,6 +20,13 @@ Dự án áp dụng chặt chẽ mô hình **ELT** (Extract - Load - Transform) 
 3. Gold (Business Level Data):
    - **Mô tả:** Dữ liệu đã được join (kết hợp) giữa Thời tiết và Chất lượng không khí, được tổng hợp theo ngày/tháng/vùng để sẵn sàng đưa lên Dashboard báo cáo.
 
+## Orchestration & Deployment
+- **Apache Airflow:** Luồng ELT được tự động hóa chạy hàng giờ (`@hourly`) thông qua DAG `weather_meteo_elt_pipeline` nằm trong thư mục `dags/`. Airflow quản lý retry, tự động hoá chạy pipeline và tracking log.
+- **Docker Compose:** Toàn bộ hệ thống (PostgreSQL, Airflow) được deploy nhanh chóng bằng `docker-compose.yml`.
+- **Database Isolation (Security):** Hệ thống được cấu trúc bảo mật cao bằng cách tách biệt hoàn toàn 2 Database trong cùng 1 container PostgreSQL:
+   - `air_quality_db`: Dedicated cho Data Pipeline, chỉ cho phép User của Data Platform truy cập.
+   - `airflow_db`: Dedicated cho Airflow Metadata (chứa các bảng hệ thống của Airflow), được bảo mật bằng tài khoản `airflow` riêng biệt.
+
 ## Cấu Trúc Thư Mục
 Dự án được chia làm các module chính (Đi sâu vào từng thư mục để đọc README chi tiết):
 

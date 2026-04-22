@@ -1,14 +1,13 @@
 # Airflow DAGs (Orchestration Layer)
 
-Thư mục này chứa các file định nghĩa **DAG (Directed Acyclic Graph)** để cung cấp cho Apache Airflow.
+Thư mục này chứa các file định nghĩa DAG (Directed Acyclic Graph) cho Apache Airflow. Nó đóng vai trò là "nhạc trưởng", điều phối khi nào thì code Python lấy dữ liệu được chạy.
 
-Airflow đóng vai trò như một người **nhạc trưởng (Orchestrator)**. Thay vì bạn phải mở Terminal lên gõ `python src/main.py` mỗi ngày, Airflow sẽ tự động thực hiện việc đó theo một lịch trình bạn định sẵn (Ví dụ: 1 tiếng chạy 1 lần).
+## Thành phần
+- **`pipeline.py`**: Định nghĩa luồng chạy tự động `weather_meteo_elt_pipeline`.
+  - **Schedule:** `@hourly` (Chạy mỗi giờ 1 lần).
+  - **Retry:** Tự động retry 2 lần nếu gọi API thất bại.
+  - **Task chính:** Nhúng logic Python (`src.main`) thông qua `PythonOperator`.
 
-## Các file DAG
-- `pipeline.py`: Chứa DAG `weather_meteo_elt_pipeline`. 
-  - Nó import trực tiếp code từ thư mục `src/` (`OpenMeteoExtractor`, `PostgresLoader`).
-  - Định nghĩa một `PythonOperator` để chạy luồng quy trình: Kéo API -> Cắm vào Database.
-  - Được cấu hình chạy định kỳ (schedule_interval).
-
-## Cách hoạt động
-Airflow sẽ dò tìm trong thư mục này. Bất cứ file Python nào định nghĩa một Object `DAG` thì sẽ hiển thị lên giao diện Web UI của Airflow. Từ Web UI, bạn có thể theo dõi lịch sử chạy, số lần lỗi (retry), và chi tiết từng task trong chu trình.
+## Lưu ý khi triển khai
+- Thư mục này được mount trực tiếp vào container Airflow thông qua Docker Volume (`./airflow/dags:/opt/airflow/dags`). Mọi thay đổi trong code ở đây sẽ được Airflow nhận diện ngay lập tức mà không cần restart container.
+- Đảm bảo biến môi trường `PYTHONPATH` của Airflow đã có thư mục gốc của project để DAG có thể import được các module từ `src/`.

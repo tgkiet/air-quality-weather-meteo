@@ -10,7 +10,7 @@ Thư mục `src/` chứa toàn bộ logic lập trình bằng Python để thự
   - Đảm nhận nhiệm vụ **Load**.
   - `postgres_loader.py`: Chứa class `PostgresLoader` quản lý kết nối an toàn với PostgreSQL và thực hiện lệnh `INSERT INTO` để nhét cục raw JSON vào Database. Nó sử dụng `psycopg2.sql` để **ngăn chặn hoàn toàn lỗi bảo mật SQL Injection** khi truyền tên bảng.
 - **`scripts/`**: 
-  - Chứa các đoạn script setup ban đầu (ví dụ: `init_raw_tables.sql` để tạo bảng raw trên PostgreSQL).
+  - Chứa các đoạn script setup ban đầu. Nổi bật là `init_dbs.sh`, file bash script tự động chạy khi khởi tạo PostgreSQL container để thiết lập song song 2 Database riêng biệt (tách biệt Airflow Metadata và Data Warehouse) nhằm đảm bảo an toàn bảo mật.
 - **`utils/`**: 
   - Chứa các hàm tiện ích dùng chung cho toàn bộ pipeline.
   - `logger.py`: Cung cấp class Logger được chuẩn hoá, giúp ghi log tất cả hoạt động ra màn hình console và đồng thời lưu vào file `logs/pipeline.log`. Mọi sự cố và thao tác đều được lưu vết chi tiết.
