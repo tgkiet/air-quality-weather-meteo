@@ -42,3 +42,4 @@ volumes:
 networks:
   meteo_network:
     driver: bridge
+    
