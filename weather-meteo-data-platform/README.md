@@ -10,9 +10,13 @@ Thư mục này là **trái tim** của toàn bộ hệ thống xử lý dữ li
 - **Containerization:** Docker & Docker Compose
 
 ## Cấu Trúc Thành Phần
-1. [`src/`](./src/README.md): Chứa code Python thực hiện khâu **Extract** (Gọi Open-Meteo API) và **Load** (Nhét raw JSON vào PostgreSQL).
-2. [`dags/`](./dags/README.md): Chứa các kịch bản lập lịch (DAGs) để Airflow tự động hoá việc chạy code ở thư mục `src`.
-3. [`dbt-transform/`](./dbt-transform/): Chứa dự án `dbt`. Làm nhiệm vụ **Transform**: query vào bảng raw JSON trong PostgreSQL để bóc tách, làm sạch (Staging) và thiết kế bảng phân tích (Marts).
+1. [`src/`](./src/README.md): Chứa code Python thực hiện khâu **Extract** (Gọi Open-Meteo API) và **Load** (Nhét raw JSON vào PostgreSQL). Có tích hợp hệ thống Logging (`logs/pipeline.log`) và bảo mật chống SQL Injection.
+2. [`airflow/`](./airflow/): Thư mục cấu hình cho Airflow, chứa `dags/` (kịch bản lập lịch tự động) và `logs/`.
+3. [`dbt-transform/`](./dbt-transform/): Chứa dự án `dbt`. Làm nhiệm vụ **Transform**: query vào bảng raw JSON trong PostgreSQL để bóc tách, làm sạch (Staging - Silver) và thiết kế bảng phân tích (Marts - Gold).
+4. `Dockerfile` & `requirements_airflow.txt`: File thiết lập Custom Image cho Airflow, giúp cài đặt sẵn các thư viện cần thiết (Production Best Practice), tách biệt với môi trường Local.
+
+> **💡 Lưu ý về Dữ liệu Raw (Bronze Layer):** 
+> Dữ liệu ở tầng Raw sử dụng cơ chế **Append-only** (Chỉ thêm mới). Do đó, việc bạn thấy nhiều record trùng lặp khi chạy pipeline nhiều lần là **BÌNH THƯỜNG**. Việc làm sạch và xóa trùng lặp (Deduplication) sẽ được `dbt` xử lý ở tầng Silver.
 
 ## Hướng Dẫn Chạy (Quick Start)
 
@@ -31,10 +35,13 @@ AIRFLOW_DB=airflow_db
 ```
 
 ### 2. Khởi chạy toàn bộ hệ thống bằng Docker
-Bạn chỉ cần gõ lệnh sau để dựng PostgreSQL và Airflow lên:
+Vì hệ thống sử dụng Custom Image cho Airflow, bạn luôn phải thêm cờ `--build` để cài đặt các thư viện từ `requirements_airflow.txt`:
 ```bash
-docker compose up -d
+docker compose down
+docker compose up -d --build
 ```
+*(Cảnh báo: Không thêm cờ `-v` vào lệnh `down` trừ khi bạn muốn xóa vĩnh viễn toàn bộ dữ liệu Database).*
+
 *Lưu ý: Trong lần khởi chạy đầu tiên, Postgres sẽ tự động tạo ra cả `air_quality_db` và `airflow_db` dựa trên file script `src/scripts/init_dbs.sh`.*
 
 ### 3. Đăng nhập Airflow
