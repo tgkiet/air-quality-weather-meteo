@@ -27,6 +27,7 @@ services:
     environment:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres_db:5432/${AIRFLOW_DB_NAME}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
       POSTGRES_HOST: postgres_db
       POSTGRES_PORT: 5432
     volumes:
@@ -38,7 +39,13 @@ services:
       - postgres_db
     networks:
       - meteo_network
-    command: bash -c "airflow db migrate && airflow users create --username ${_AIRFLOW_WWW_USER_USERNAME} --password ${_AIRFLOW_WWW_USER_PASSWORD} --firstname Admin --lastname User --role Admin --email admin@example.com || true && airflow standalone"
+    command: >
+      bash -c "airflow db migrate && 
+      (airflow users create --username ${_AIRFLOW_WWW_USER_USERNAME} --password ${_AIRFLOW_WWW_USER_PASSWORD} --firstname Kiet --lastname Admin --role Admin --email giakiet.work@gmail.com || true) ; 
+      airflow scheduler & 
+      airflow triggerer & 
+      airflow dag-processor & 
+      airflow api-server"
 
 volumes:
   postgres_data:
