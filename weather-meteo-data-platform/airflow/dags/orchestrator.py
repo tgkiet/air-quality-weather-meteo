@@ -19,7 +19,7 @@ with DAG(
     # 2. Định nghĩa các task sử dụng BashOperator
     fetch_data = BashOperator(
         task_id='fetch_data',
-        bash_command='python3 /opt/airflow/src/main.py'
+        bash_command='python3 /opt/airflow/src/main.py '
     )
     
     fetch_data

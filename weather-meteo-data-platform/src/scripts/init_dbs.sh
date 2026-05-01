@@ -6,15 +6,15 @@ set -e
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     -- Tạo User riêng cho Airflow
-    CREATE USER $AIRFLOW_USER WITH PASSWORD '$AIRFLOW_PASSWORD';
+    CREATE USER $AIRFLOW_DB_USER WITH PASSWORD '$AIRFLOW_DB_PASSWORD';
     
     -- Tạo Database riêng cho Airflow
-    CREATE DATABASE $AIRFLOW_DB;
+    CREATE DATABASE $AIRFLOW_DB_NAME;
     
     -- Cấp toàn quyền cho Airflow User trên Database này
-    GRANT ALL PRIVILEGES ON DATABASE $AIRFLOW_DB TO $AIRFLOW_USER;
+    GRANT ALL PRIVILEGES ON DATABASE $AIRFLOW_DB_NAME TO $AIRFLOW_DB_USER;
     
     -- Đối với Postgres 15+, cần cấp thêm quyền trên schema public
-    \c $AIRFLOW_DB
-    GRANT ALL ON SCHEMA public TO $AIRFLOW_USER;
+    \c $AIRFLOW_DB_NAME
+    GRANT ALL ON SCHEMA public TO $AIRFLOW_DB_USER;
 EOSQL

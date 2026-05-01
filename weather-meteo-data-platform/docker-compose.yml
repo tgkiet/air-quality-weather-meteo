@@ -8,9 +8,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-      AIRFLOW_USER: ${AIRFLOW_USER}
-      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD}
-      AIRFLOW_DB: ${AIRFLOW_DB}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      AIRFLOW_DB_NAME: ${AIRFLOW_DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./src/scripts/init_dbs.sh:/docker-entrypoint-initdb.d/init_dbs.sh
@@ -22,8 +22,13 @@ services:
     build: .
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_USER}:${AIRFLOW_PASSWORD}@postgres_db:5432/${AIRFLOW_DB}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres_db:5432/${AIRFLOW_DB_NAME}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      POSTGRES_HOST: postgres_db
+      POSTGRES_PORT: 5432
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -33,7 +38,7 @@ services:
       - postgres_db
     networks:
       - meteo_network
-    command: bash -c "airflow db migrate && airflow standalone"
+    command: bash -c "airflow db migrate && airflow users create --username ${_AIRFLOW_WWW_USER_USERNAME} --password ${_AIRFLOW_WWW_USER_PASSWORD} --firstname Admin --lastname User --role Admin --email admin@example.com || true && airflow standalone"
 
 volumes:
   postgres_data:
