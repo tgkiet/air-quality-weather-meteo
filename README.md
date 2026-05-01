@@ -1,38 +1,84 @@
-# Air Quality & Weather Data Pipeline Project
+# Air Quality & Weather Data Pipeline
 
-Chào mừng đến với dự án **Air Quality & Weather Data Pipeline**. Đây là một hệ thống Data Engineering end-to-end hoàn chỉnh nhằm mục đích thu thập, xử lý và phân tích dữ liệu Thời tiết, Khí tượng và Chất lượng không khí (Air Quality) tại các khu vực TPHCM.
+> Hệ thống Data Engineering end-to-end — thu thập, xử lý và phân tích dữ liệu Thời tiết & Chất lượng không khí tại TP.HCM theo chuẩn **Modern Data Stack**.
+
+---
 
 ## Mục Tiêu Dự Án
-Xây dựng một Data Platform tự động hóa quy trình kéo dữ liệu từ API, lưu trữ, làm sạch và tổng hợp dữ liệu phục vụ cho BI & Analytics theo chuẩn Data Engineering hiện đại (Modern Data Stack).
 
-## Kiến Trúc Hệ Thống (Medallion Architecture)
-Dự án áp dụng chặt chẽ mô hình **ELT** (Extract - Load - Transform) kết hợp với **Medallion Architecture**:
+Xây dựng một Data Platform tự động hóa hoàn toàn quy trình từ thu thập dữ liệu thô từ API → lưu trữ → biến đổi → phục vụ BI & Analytics.
 
-1. Bronze (Raw Data):
-   - **Mô tả:** Dữ liệu JSON thô hỗn tạp kéo trực tiếp từ Open-Meteo API.
-   - **Lưu trữ:** Bảng `api_openmeteo_raw_data` trong PostgreSQL (cột `raw_json` kiểu JSONB).
-   - **Phân loại:** Dựa vào cột `source_type` (`weather_forecast_hourly`, `air_quality_hourly`).
+---
 
-2. Silver (Cleaned & Transformed Data):
-   - **Mô tả:** Dữ liệu JSON đã được làm sạch, bóc tách thành các cột (tabular format), cast đúng kiểu dữ liệu (Date, Float, Int) và xử lý null.
-   - **Công cụ:** `dbt` (Data Build Tool).
+## Kiến Trúc Hệ Thống
 
-3. Gold (Business Level Data):
-   - **Mô tả:** Dữ liệu đã được join (kết hợp) giữa Thời tiết và Chất lượng không khí, được tổng hợp theo ngày/tháng/vùng để sẵn sàng đưa lên Dashboard báo cáo.
+Dự án áp dụng mô hình **ELT** kết hợp **Medallion Architecture**:
 
-## Orchestration & Deployment
-- **Apache Airflow:** Luồng ELT được tự động hóa chạy hàng giờ (`@hourly`) thông qua DAG `weather_meteo_elt_pipeline` nằm trong thư mục `dags/`. Airflow quản lý retry, tự động hoá chạy pipeline và tracking log.
-- **Docker Compose:** Toàn bộ hệ thống (PostgreSQL, Airflow) được deploy nhanh chóng bằng `docker-compose.yml`.
-- **Database Isolation (Security):** Hệ thống được cấu trúc bảo mật cao bằng cách tách biệt hoàn toàn 2 Database trong cùng 1 container PostgreSQL:
-   - `air_quality_db`: Dedicated cho Data Pipeline, chỉ cho phép User của Data Platform truy cập.
-   - `airflow_db`: Dedicated cho Airflow Metadata (chứa các bảng hệ thống của Airflow), được bảo mật bằng tài khoản `airflow` riêng biệt.
+```
+[Open-Meteo API]
+      │
+      ▼
+🥉 Bronze  →  Raw JSONB (api_openmeteo_raw_data)
+      │
+      ▼ dbt
+🥈 Silver  →  Parsed & Deduplicated (stg_weather_hourly, stg_air_quality_hourly)
+      │
+      ▼ dbt
+🥇 Gold    →  Analytics-ready (mart_hourly_meteo_report)
+```
+
+**Công nghệ:** Python · Apache Airflow 3.2.0 · PostgreSQL 16 · dbt · Docker Compose
+
+---
 
 ## Cấu Trúc Thư Mục
-Dự án được chia làm các module chính (Đi sâu vào từng thư mục để đọc README chi tiết):
 
-- [`weather-meteo-data-platform/`](./weather-meteo-data-platform/README.md): Chứa toàn bộ core logic của hệ thống Data Pipeline (Airflow, dbt, Python scripts, Docker).
-- `Open-Meteo-Dataset/`: Chứa bộ dữ liệu crawl mẫu (về air quality và weather & meteo từ 02/8/2022 đến 29/11/2025 tại 31 location từ OpenAQ). Dữ liệu này được gitignore do dung lượng quá lớn. *Liên hệ để lấy file data raw.*
+```
+air-quality-weather-meteo/
+│
+└── weather-meteo-data-platform/     # ← Core của toàn bộ hệ thống
+    ├── src/                         # Python: Extract & Load
+    ├── airflow/                     # DAG: Orchestration
+    ├── dbt-transform/               # SQL: Transform
+    └── docs/                        # Tài liệu chi tiết
+```
 
-## Liên Hệ (Contact)
-- **Email:** giakiettran14102005@gmail.com
+---
 
+## 📚 Tài Liệu
+
+| Tài Liệu | Nội Dung |
+|---|---|
+| [weather-meteo-data-platform/README.md](./weather-meteo-data-platform/README.md) | Tổng quan platform, Quick Start |
+| [docs/SETUP.md](./weather-meteo-data-platform/docs/SETUP.md) | Cài đặt, cấu hình `.env`, biến môi trường |
+| [docs/ARCHITECTURE.md](./weather-meteo-data-platform/docs/ARCHITECTURE.md) | Kiến trúc dữ liệu, luồng xử lý chi tiết |
+| [docs/TROUBLESHOOTING.md](./weather-meteo-data-platform/docs/TROUBLESHOOTING.md) | Xử lý sự cố thường gặp |
+
+---
+
+## Dataset
+
+- **`Open-Meteo-Dataset/`**: Bộ dữ liệu crawl mẫu (air quality & weather từ 02/8/2022 đến 29/11/2025 tại 31 locations từ OpenAQ).
+  > Dữ liệu được gitignore do dung lượng lớn. Liên hệ để nhận file.
+
+---
+
+## Liên Hệ
+
+- **Email:** giakiet.work@gmail.com
+
+## Cấu trúc Documentation
+air-quality-weather-meteo/
+├── README.md                          ← Cấp 1: Cổng vào dự án
+│
+└── weather-meteo-data-platform/
+    ├── README.md                      ← Cấp 2: Landing page
+    │
+    ├── docs/                          
+    │   ├── SETUP.md                   Env vars, quick start, cấu hình
+    │   ├── ARCHITECTURE.md            Medallion arch, data flow, Docker diagram
+    │   └── TROUBLESHOOTING.md         Bảng lỗi + lệnh chẩn đoán
+    │
+    ├── src/README.md                  Chi tiết Extract & Load modules
+    ├── airflow/README.md              Chi tiết DAG, schedule, auth
+    └── dbt-transform/README.md        Chi tiết Transform layer

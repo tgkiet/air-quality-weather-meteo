@@ -13,7 +13,7 @@ default_args = {
 with DAG(
     dag_id='open_meteo_api_pipeline_orchestrator',
     default_args=default_args,
-    schedule=timedelta(hours=1),
+    schedule='@hourly',
     catchup=False
 ) as dag:
     # 2. Định nghĩa các task sử dụng BashOperator

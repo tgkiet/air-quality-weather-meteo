@@ -1,56 +1,79 @@
-# Data Platform Core
+# ☁️ Weather & Air Quality Data Platform
 
-Thư mục này là **trái tim** của toàn bộ hệ thống xử lý dữ liệu. Nó bao gồm toàn bộ code và config để vận hành quy trình ELT (Extract, Load, Transform).
+> Pipeline dữ liệu tự động theo chuẩn **Data Engineering Enterprise** — thu thập, lưu trữ và xử lý dữ liệu thời tiết & chất lượng không khí TP.HCM mỗi giờ, hoàn toàn tự động.
 
-## Công Nghệ Sử Dụng
-- **Ngôn ngữ:** Python 3.x
-- **Database (Data Warehouse):** PostgreSQL
-- **Orchestration:** Apache Airflow
-- **Data Transformation:** dbt (Data Build Tool)
-- **Containerization:** Docker & Docker Compose
+---
 
-## Cấu Trúc Thành Phần
-1. [`src/`](./src/README.md): Chứa code Python thực hiện khâu **Extract** (Gọi Open-Meteo API) và **Load** (Nhét raw JSON vào PostgreSQL). Có tích hợp hệ thống Logging (`logs/pipeline.log`) và bảo mật chống SQL Injection.
-2. [`airflow/`](./airflow/): Thư mục cấu hình cho Airflow, chứa `dags/` (kịch bản lập lịch tự động) và `logs/`.
-3. [`dbt-transform/`](./dbt-transform/): Chứa dự án `dbt`. Làm nhiệm vụ **Transform**: query vào bảng raw JSON trong PostgreSQL để bóc tách, làm sạch (Staging - Silver) và thiết kế bảng phân tích (Marts - Gold).
-4. `Dockerfile` & `requirements_airflow.txt`: File thiết lập Custom Image cho Airflow, giúp cài đặt sẵn các thư viện cần thiết (Production Best Practice), tách biệt với môi trường Local.
+## Kiến Trúc Tổng Quan
 
-> **💡 Lưu ý về Dữ liệu Raw (Bronze Layer):** 
-> Dữ liệu ở tầng Raw sử dụng cơ chế **Append-only** (Chỉ thêm mới). Do đó, việc bạn thấy nhiều record trùng lặp khi chạy pipeline nhiều lần là **BÌNH THƯỜNG**. Việc làm sạch và xóa trùng lặp (Deduplication) sẽ được `dbt` xử lý ở tầng Silver.
-
-## Hướng Dẫn Chạy (Quick Start)
-
-### 1. Chuẩn bị biến môi trường
-Tạo file `.env` tại thư mục này với nội dung sau:
-```env
-POSTGRES_USER=your_user
-POSTGRES_PASSWORD=your_password
-POSTGRES_DB=air_quality_db
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5434
-
-AIRFLOW_USER=airflow_user
-AIRFLOW_PASSWORD=airflow_password
-AIRFLOW_DB=airflow_db
+```
+[Open-Meteo API] ──► [Extract] ──► [Load: PostgreSQL Bronze] ──► [dbt Transform: Silver → Gold]
+                          ↑
+                 [Airflow Scheduler @hourly]
 ```
 
-### 2. Khởi chạy toàn bộ hệ thống bằng Docker
-Vì hệ thống sử dụng Custom Image cho Airflow, bạn luôn phải thêm cờ `--build` để cài đặt các thư viện từ `requirements_airflow.txt`:
+| Tầng | Công Cụ | Vai Trò |
+|---|---|---|
+| **Orchestration** | Apache Airflow 3.2.0 | Tự động trigger pipeline mỗi đầu giờ |
+| **Extract & Load** | Python (OOP) | Gọi API, ghi raw JSON vào PostgreSQL |
+| **Storage** | PostgreSQL 16 | Data Warehouse (Bronze/Silver/Gold) |
+| **Transform** | dbt | SQL transform, dedup, parse JSON |
+| **Infrastructure** | Docker Compose | Toàn bộ hệ thống chạy trong container |
+
+---
+
+## Cấu Trúc Thư Mục
+
+```
+weather-meteo-data-platform/
+├── 📄 docker-compose.yml        # Hạ tầng: Postgres + Airflow
+├── 📄 Dockerfile                # Custom Airflow image
+├── 📄 .env                      # ⚠️ Credentials (KHÔNG commit lên Git)
+│
+├── 📁 src/                      # Extract & Load Layer  →  src/README.md
+├── 📁 airflow/                  # Orchestration Layer   →  airflow/README.md
+├── 📁 dbt-transform/            # Transform Layer       →  dbt-transform/README.md
+└── 📁 docs/                     # Tài liệu chi tiết
+    ├── SETUP.md                 # Hướng dẫn cài đặt & cấu hình
+    ├── ARCHITECTURE.md          # Kiến trúc dữ liệu & luồng xử lý
+    └── TROUBLESHOOTING.md       # Xử lý sự cố
+```
+
+---
+
+## Quick Start
+
 ```bash
-docker compose down
+# 1. Tạo file .env (xem docs/SETUP.md để biết cấu trúc)
+# 2. Khởi chạy toàn bộ hệ thống
 docker compose up -d --build
+
+# 3. Truy cập Airflow UI
+open http://localhost:8080
+# Username/Password: xem _AIRFLOW_WWW_USER_* trong .env
 ```
-*(Cảnh báo: Không thêm cờ `-v` vào lệnh `down` trừ khi bạn muốn xóa vĩnh viễn toàn bộ dữ liệu Database).*
 
-*Lưu ý: Trong lần khởi chạy đầu tiên, Postgres sẽ tự động tạo ra cả `air_quality_db` và `airflow_db` dựa trên file script `src/scripts/init_dbs.sh`.*
+> ⚠️ **Reset hoàn toàn (xóa sạch data):** `docker compose down -v && docker compose up -d`
 
-### 3. Đăng nhập Airflow
-- Truy cập trình duyệt: `http://localhost:8080`
-- **Username:** `admin`
-- **Password:** Lấy từ log của Airflow container (`docker logs airflow_container | grep Password`) hoặc file `standalone_admin_password.txt`.
+---
 
-### 4. Chạy Test Local (Không dùng Airflow)
-Nếu bạn muốn debug trực tiếp quá trình Extract và Load:
-```bash
-python src/main.py
-```
+## 📚 Tài Liệu
+
+| Tài Liệu | Nội Dung |
+|---|---|
+| [docs/SETUP.md](./docs/SETUP.md) | Yêu cầu hệ thống, cấu hình `.env`, giải thích biến môi trường |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Medallion Architecture, luồng dữ liệu, quyết định kỹ thuật |
+| [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Chẩn đoán và khắc phục lỗi thường gặp |
+| [src/README.md](./src/README.md) | Chi tiết Extract & Load Layer (Python modules) |
+| [airflow/README.md](./airflow/README.md) | Chi tiết Orchestration (DAG, schedule, auth) |
+| [dbt-transform/README.md](./dbt-transform/README.md) | Chi tiết Transform Layer (dbt models, SQL) |
+
+---
+
+## Nguyên Tắc Kiến Trúc
+
+- **OOP & Separation of Concerns** — Extract, Load, Config mỗi class một trách nhiệm duy nhất
+- **No Hardcoding** — Cấu hình API trong `config.json`, credentials trong `.env`
+- **Proper Error Propagation** — Dùng `raise` thay vì `return` để Airflow nhận đúng tín hiệu FAILED
+- **SQL Injection Prevention** — `psycopg2.sql.Identifier` cho tên bảng động
+- **Infrastructure as Code** — Toàn bộ hạ tầng trong `docker-compose.yml`
