@@ -19,7 +19,7 @@ with DAG(
     # 2. Định nghĩa các task sử dụng BashOperator
     fetch_data = BashOperator(
         task_id='fetch_data',
-        bash_command='python3 /home/kiet/gkinhere/air-quality-pipeline/air-quality-weather-meteo/weather-meteo-data-platform/src/main.py'
+        bash_command='python3 /opt/airflow/src/main.py'
     )
     
     fetch_data
