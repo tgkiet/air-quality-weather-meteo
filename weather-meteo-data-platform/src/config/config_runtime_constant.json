@@ -2,7 +2,7 @@
   "api": {
     "max_retries": 3,
     "backoff_factor": 1,
-    "timeout_sec": 10
+    "timeout_sec": 30
   },
   "database": {
     "max_retries": 3,
