@@ -20,7 +20,6 @@ with DAG(
     catchup=False,
 ) as dag:
 
-    # -------------------------------------------------------------------------
     # Task: Extract & Load
     #
     # Jinja Templating được sử dụng để "tiêm" (inject) Logical Date của Airflow
@@ -30,7 +29,6 @@ with DAG(
     # ĐÂY LÀ THỜI ĐIỂM AIRFLOW LẬP LỊCH ĐỂ CHẠY TASK, không phải datetime.now().
     # Dù task bị Retry lúc 10h05, biến này vẫn giữ nguyên giá trị 10h00.
     # Đây là cơ chế CỐT LÕI đảm bảo tính Lũy Đẳng (Idempotency) của Pipeline.
-    # -------------------------------------------------------------------------
     fetch_data = BashOperator(
         task_id='fetch_data',
         bash_command=(
@@ -40,3 +38,10 @@ with DAG(
     )
 
     fetch_data
+    
+
+# NOTE: Nếu đúng thực tế thì sẽ tách Airflow DAG  ở trên ra thành 2 Task độc lập (ví dụ: fetch_weather_task và fetch_aq_task). 
+# Cả hai task cùng gọi chung file main.py, nhưng truyền thêm một cờ --api_type weather hoặc --api_type air_quality. 
+# Fail thằng nào, retry thằng đó. Không ảnh hưởng chéo. Nhưng việc tách ra sẽ có nhược điểm là sẽ phải chạy 2 lần main
+# TÓM GỌN: tách ra = over-engineering + dễ duplicate code, không tách ra = đơn giản + dễ maintain.
+# => Pipeline này tuy 2 data nhưng chung 1 dùng API open-meteo nên chọn gộp DAG chạy 1 lần là xong
