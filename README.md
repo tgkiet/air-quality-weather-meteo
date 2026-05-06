@@ -2,6 +2,13 @@
 
 > Hệ thống Data Engineering end-to-end — thu thập, xử lý và phân tích dữ liệu Thời tiết & Chất lượng không khí tại TP.HCM theo chuẩn **Modern Data Stack**.
 
+# DOCS NÀY SẼ CHỈ MIÊU TẢ CƠ BẢN QUÁ TRÌNH XÂY DỰNG PIPELINE NÀY VÀ LINK ĐẾN CÁC DOCS CHI TIẾT TRONG FOLDER PIPELINE CHÍNH
+
+## Dự án này trước kia chỉ đơn giản là CALL API và dùng SCRIPT để DOWNLOAD DATA về với dạng CSV.
+## CÒN HIỆN TẠI: Đã update && upgrade lên DATA PIPELINE hoàn chỉnh với BRONZE ARCHITECTURE, và tuân thủ nghiêm chỉnh các nguyên tắc của modern data stack, đồng thời cũng là một DATA PIPELINE END TO END tâm huyết của tôi để đưa vào CV
+
+# SẼ UPDATE DOCS NÀY SAU, DOCS CHÍNH CỦA PIPELINE LÀ Ở THƯ MỤC /air-quality-weather-meteo/weather-meteo-data-platform/README.md
+
 ---
 
 ## Mục Tiêu Dự Án
