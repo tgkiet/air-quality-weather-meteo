@@ -1,6 +1,6 @@
 # 🐍 Source Code — Extract & Load Layer
 
-Thư mục `src/` chứa toàn bộ logic Python thực hiện **Bước E (Extract)** và **Bước L (Load)** trong mô hình ELT. Code được viết theo chuẩn **OOP** và **Separation of Concerns** — mỗi class đảm nhận đúng một trách nhiệm duy nhất.
+Thư mục `src/` chứa toàn bộ logic Python thực hiện **Bước E (Extract)** và **Bước L (Load)** trong cấu trúc ELT. Dựa trên triết lý **Twelve-Factor App**, **Separation of Concerns**, và **Idempotency**, lớp này được thiết kế để chịu tải cao, an toàn tuyệt đối và bảo trì dễ dàng.
 
 ---
 
@@ -8,96 +8,67 @@ Thư mục `src/` chứa toàn bộ logic Python thực hiện **Bước E (Extr
 
 ```
 src/
-├── main.py                  # Entrypoint — "dán keo" Extract và Load lại với nhau
+├── main.py                  # Entrypoint — kết nối và điều phối Extract & Load, hỗ trợ argparse
 │
 ├── config/
-│   └── config.json          # Cấu hình API (URL, tọa độ, các biến dữ liệu)
+│   ├── config.json                  # Cấu hình API endpoints (URL, parameters, tọa độ)
+│   └── config_runtime_constant.json # Các hằng số vận hành (timeout, max_retries, delay)
 │
 ├── extractors/
-│   └── open_meteo.py        # Class OpenMeteoExtractor
+│   └── open_meteo.py        # Class OpenMeteoExtractor (Data Contract, Session Pooling)
 │
 ├── loaders/
-│   └── postgres_loader.py   # Class PostgresLoader
+│   └── postgres_loader.py   # Class PostgresLoader (UPSERT MVCC Optimization)
 │
 ├── scripts/
-│   └── init_dbs.sh          # Bash script tạo Database khi Postgres khởi động
+│   └── init_dbs.sh          # Khởi tạo Database Postgres bằng Bash khi khởi động container
 │
 └── utils/
-    ├── config_manager.py    # Singleton ConfigManager (đọc config.json)
-    └── logger.py            # Logger chuẩn hóa
+    ├── config_manager.py    # Singleton ConfigManager nạp các file JSON cấu hình
+    └── logger.py            # Logger chuẩn hóa xuất ra Console & File
 ```
 
 ---
 
-## Mô Tả Chi Tiết Từng Module
+## Các Tính Năng Enterprise-Grade (Nổi bật cho CV Data Engineer)
 
-### `config/config.json` — Nguồn Cấu Hình Duy Nhất
+### 1. Tính Lũy Đẳng (Idempotency) ở Lớp Bronze
+- Lớp `PostgresLoader` được thiết kế để đảm bảo không bao giờ sinh ra dữ liệu rác nếu Pipeline bị lỗi hoặc phải chạy bù (Catchup/Backfill).
+- **Cơ chế UPSERT:** Thay vì dùng lệnh DELETE/INSERT (có thể sinh Dead Tuples làm phình DB theo chuẩn MVCC), mã nguồn sử dụng lệnh `INSERT ... ON CONFLICT DO UPDATE`. 
+- PostgreSQL sẽ dựa trên Unique Constraint `(source_type, execution_date)` để cập nhật dữ liệu một cách tốn ít chi phí phần cứng nhất.
 
-File JSON là nguồn sự thật duy nhất (Single Source of Truth) cho tất cả cấu hình API. Mọi thay đổi về endpoint, tọa độ địa lý, hoặc các biến dữ liệu cần thu thập đều thực hiện **tại đây, không ở đâu khác**.
+### 2. Trạm Kiểm Duyệt Schema (Data Contract Validation)
+- Class `OpenMeteoExtractor` không mù quáng tin tưởng dữ liệu API. API có thể trả về thông báo bảo trì `{"message": "Maintenance"}` với HTTP 200 OK, gây sập toàn bộ hệ thống lưu trữ tĩnh.
+- **Dependency Injection:** File `main.py` sẽ quy định Hợp đồng Dữ Liệu (`expected_keys={"latitude", "longitude", "hourly"}`) và "tiêm" (inject) vào Extractor.
+- Extractor kiểm tra xem Response từ API có đáp ứng đủ Schema cam kết không. Nếu không, ngay lập tức chặn lại và báo `Data Contract Violation`.
 
-```json
-{
-  "api": {
-    "open_meteo": {
-      "weather_url": "https://api.open-meteo.com/v1/forecast",
-      "weather_params": { "latitude": 10.7756, "longitude": 106.7019, ... },
-      "aq_url": "https://air-quality-api.open-meteo.com/v1/air-quality",
-      "aq_params": { "latitude": 10.7756, "longitude": 106.7019, ... }
-    }
-  }
-}
-```
+### 3. Tối ưu Mạng và Kết Nối (Connection Pooling & Retry)
+- **Session Pooling:** Sử dụng `requests.Session()` thay vì `requests.get()` để tạo kết nối TCP liên tục (Keep-Alive), tránh chi phí bắt tay Handshake liên tục khi gửi nhiều request.
+- **Exponential Backoff:** Dùng thư viện `urllib3.util.retry.Retry` để tự động giãn cách thời gian khi Retry. Lần 1 chờ 0s, lần 2 chờ 2s, lần 3 chờ 4s để giảm tải cho Server bị ngập lụt request (mã lỗi 429).
+- **psycopg2.extras.Json:** Delegated toàn bộ việc đóng gói JSONB cho C-driver của thư viện psycopg2 để tăng hiệu suất gấp nhiều lần.
 
----
-
-### `utils/config_manager.py` — ConfigManager (Singleton Pattern)
-
-Triển khai **Singleton Design Pattern** để đảm bảo `config.json` chỉ được đọc từ disk đúng một lần duy nhất trong vòng đời của ứng dụng.
-
-```python
-from src.utils.config_manager import ConfigManager
-
-config = ConfigManager().get_config()
-weather_url = config["api"]["open_meteo"]["weather_url"]
-```
-
-**Tại sao Singleton?** Nếu nhiều module cùng khởi tạo `ConfigManager`, không cần lo tốn tài nguyên đọc file nhiều lần — chúng đều dùng chung một instance duy nhất trong bộ nhớ.
+### 4. Triết lý cấu hình tách biệt (12-Factor App Configuration)
+- Các con số nhạy cảm (Magic Numbers) như `timeout=10` hay `max_retries=3` đều bị loại bỏ khỏi Code Logic Python.
+- Chúng được đưa ra file `config_runtime_constant.json` thông qua `ConfigManager` (Singleton Pattern). Team DevOps có thể chỉnh sửa các thông số này không cần động tới mã nguồn.
 
 ---
 
-### `extractors/open_meteo.py` — OpenMeteoExtractor
+## 🛠️ Mô Tả Chi Tiết Từng Module
 
-Class này chịu trách nhiệm **duy nhất**: gọi HTTP GET đến Open-Meteo API và trả về JSON thô.
+### `config/` — Nguồn Sự Thật Duy Nhất (Single Source of Truth)
+- `config.json`: Chứa các URL tĩnh, Endpoint, và parameters (VD: Tọa độ, múi giờ).
+- `config_runtime_constant.json`: Chứa số lần thử lại mạng, giới hạn timeout.
 
-```python
-extractor = OpenMeteoExtractor(url="https://api.open-meteo.com/v1/forecast")
-data = extractor.get_open_meteo_data(params={...})
-```
+### `utils/config_manager.py` — ConfigManager (Singleton)
+Dùng chung 1 instance trong bộ nhớ thay vì đọc file JSON từ đĩa cứng nhiều lần ở nhiều file.
 
-**Cơ chế Retry:** Tự động retry tối đa **3 lần** với delay **5 giây** nếu gặp lỗi mạng hoặc server trả về HTTP error. Nếu sau 3 lần vẫn thất bại, `raise Exception` để Airflow nhận biết và đánh dấu task FAILED.
+### `extractors/open_meteo.py`
+Nhiệm vụ: Truyền request API, Retry thông minh nếu sập server, thực thi Data Contract.
+- Có khả năng chặn bất kì Exception lặt vặt bằng cơ chế Catch-all Anti-Pattern để giữ lại Traceback gốc bằng cú pháp `raise ... from e`.
 
----
-
-### `loaders/postgres_loader.py` — PostgresLoader
-
-Class này chịu trách nhiệm **duy nhất**: kết nối PostgreSQL và ghi dữ liệu vào bảng.
-
-```python
-loader = PostgresLoader()
-loader.connect()
-loader.insert_data(
-    table_name="api_openmeteo_raw_data",
-    source_type="weather_forecast_hourly",
-    raw_json=data
-)
-loader.close()
-```
-
-**Bảo mật SQL Injection:** Tên bảng được truyền qua `psycopg2.sql.Identifier` — không bao giờ nối chuỗi SQL thủ công (`f"INSERT INTO {table_name}"`). Đây là lỗ hổng phổ biến mà nhiều developer mắc phải.
-
-**Cấu hình kết nối** được đọc hoàn toàn từ biến môi trường (`.env`). Trong Docker, `POSTGRES_HOST=postgres_db` và `POSTGRES_PORT=5432` được inject tự động qua `docker-compose.yml`.
-
----
+### `loaders/postgres_loader.py`
+Nhiệm vụ: Tiêm dữ liệu vào PostgreSQL bằng Context Manager `with cursor` (ngăn Rò rỉ con trỏ Database).
+- Triển khai **Fail-fast Validation** để cảnh báo ngay từ vòng ngoài nếu DevOps chưa cung cấp đủ các biến môi trường DB như `POSTGRES_USER`.
 
 ### `scripts/init_dbs.sh` — Database Initialization
 
@@ -130,14 +101,16 @@ logger.error("Đã xảy ra lỗi!")
 
 ---
 
-### `main.py` — Entrypoint
+### `main.py` — Entrypoint (CLI Argument)
+Script mồi dùng để dán (glue) Extractor và Loader.
+- Khước từ việc sử dụng bẫy thời gian `datetime.now()` để gán nhãn `execution_date`. Thay vào đó, sử dụng module `argparse` để đón lấy Argument thời điểm chính xác từ BashOperator của Airflow truyền vào bằng cú pháp Jinja Template (`{{ logical_date | ts }}`).
 
-File này là điểm nối giữa Extract và Load. Nó không chứa bất kỳ logic nghiệp vụ nào — chỉ đơn giản là gọi các class theo đúng thứ tự.
+---
 
-**Chạy thử không cần Airflow:**
+## 🏃 Cách Chạy Thử Ngang Bằng Terminal
 ```bash
-# Từ thư mục weather-meteo-data-platform/
-python src/main.py
+# Chạy với thời gian ảo (đóng giả việc Airflow tiêm Logical Date vào):
+python src/main.py --execution_date "2026-05-06T10:00:00"
 ```
 
 ---
