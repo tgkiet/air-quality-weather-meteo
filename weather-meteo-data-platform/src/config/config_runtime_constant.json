@@ -1,0 +1,11 @@
+{
+  "api": {
+    "max_retries": 3,
+    "backoff_factor": 1,
+    "timeout_sec": 10
+  },
+  "database": {
+    "max_retries": 3,
+    "retry_delay_sec": 5
+  }
+}
