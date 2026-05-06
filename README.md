@@ -75,6 +75,7 @@ air-quality-weather-meteo/
 - **Email:** giakiet.work@gmail.com
 
 ## Cấu trúc Documentation
+```bash
 air-quality-weather-meteo/
 ├── README.md                          ← Cấp 1: Cổng vào dự án
 │
@@ -88,4 +89,4 @@ air-quality-weather-meteo/
     │
     ├── src/README.md                  Chi tiết Extract & Load modules
     ├── airflow/README.md              Chi tiết DAG, schedule, auth
-    └── dbt-transform/README.md        Chi tiết Transform layer
+    └── dbt-transform/README.md        Chi tiết Transform layer```
