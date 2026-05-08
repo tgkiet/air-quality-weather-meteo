@@ -1,4 +1,4 @@
-# Air Quality & Weather Data Pipeline
+# Air Quality & Weather Meteo Data Pipeline
 
 > Hệ thống Data Engineering end-to-end — thu thập, xử lý và phân tích dữ liệu Thời tiết & Chất lượng không khí tại TP.HCM theo chuẩn **Modern Data Stack**.
 
@@ -52,7 +52,7 @@ air-quality-weather-meteo/
 
 ---
 
-## 📚 Tài Liệu
+## Tài Liệu
 
 | Tài Liệu | Nội Dung |
 |---|---|
