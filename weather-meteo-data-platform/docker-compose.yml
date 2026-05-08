@@ -47,6 +47,27 @@ services:
       airflow dag-processor & 
       airflow api-server"
 
+  dbt:
+    container_name: dbt_container
+    image: ghcr.io/dbt-labs/dbt-postgres:1.9.latest
+    working_dir: /usr/app
+    # Ghi đè ENTRYPOINT mặc định của dbt image để giữ container luôn sống ngầm.
+    # Nhờ vậy chúng ta có thể chui vào container và gõ lệnh "dbt run", "dbt test" nhiều lần.
+    entrypoint: ["tail", "-f", "/dev/null"]
+    env_file:
+      - .env
+    environment:
+      # Ghi đè lại host DB vì trong mạng nội bộ docker, postgres có tên là 'postgres_db' chứ không phải 'localhost'
+      POSTGRES_HOST: postgres_db 
+      POSTGRES_PORT: 5432
+    volumes:
+      - ./dbt-transform:/usr/app
+      - ./.dbt:/root/.dbt
+    depends_on:
+      - postgres_db
+    networks:
+      - meteo_network
+
 volumes:
   postgres_data:
 

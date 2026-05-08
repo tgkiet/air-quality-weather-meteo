@@ -1,0 +1,24 @@
+name: 'weather_meteo_transform'
+version: '1.0.0'
+config-version: 2
+
+# Profile name phải khớp với tên khai báo trong file profiles.yml
+profile: 'weather_meteo_transform'
+
+# Thư mục chứa model dbt (các file .sql)
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  weather_meteo_transform:
+    # Mặc định, mọi bảng do dbt tạo ra trong thư mục models/ sẽ là dạng VIEW.
+    # Nhưng vì là Silver Layer, chúng ta cần nó là dạng TABLE hoặc INCREMENTAL.
+    +materialized: table
