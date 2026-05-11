@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: slv_weather_hourly
+    description: "Bảng Silver chứa dữ liệu thời tiết đã được bóc tách và làm sạch, lưu trữ theo cơ chế Incremental."
+    columns:
+      - name: forecast_time
+        description: "Mốc thời gian dự báo (đã quy chuẩn về chuẩn TIMESTAMPTZ)"
+        tests:
+          - not_null
+      - name: latitude
+        description: "Vĩ độ (Đã làm tròn 2 chữ số)"
+        tests:
+          - not_null
+      - name: longitude
+        description: "Kinh độ (Đã làm tròn 2 chữ số)"
+        tests:
+          - not_null
+
+  - name: slv_air_quality_hourly
+    description: "Bảng Silver chứa dữ liệu chất lượng không khí đã bóc tách."
+    columns:
+      - name: forecast_time
+        description: "Mốc thời gian dự báo"
+        tests:
+          - not_null
+      - name: latitude
+        tests:
+          - not_null
+      - name: longitude
+        tests:
+          - not_null

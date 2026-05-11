@@ -1,13 +1,13 @@
--- Khai báo Materialization: Tầng Staging thường dùng 'view' để tiết kiệm dung lượng,
--- dữ liệu vật lý chỉ được tạo ra ở các tầng sau (Silver/Gold).
-{{ config(
-    materialized='view'
-) }}
+
 
 WITH source_data AS (
     SELECT 
         id as raw_id,
-        execution_date,
+        CAST(execution_date AS TIMESTAMPTZ) AS execution_date,
+        -- CHÚ Ý HIỆU SUẤT: Parse tọa độ NGAY TẠI ĐÂY (chỉ 1 lần/dòng) 
+        -- thay vì để trong LATERAL (bị lặp lại 24 lần/dòng)
+        ROUND(CAST(raw_json->>'latitude' AS NUMERIC), 2) AS latitude,
+        ROUND(CAST(raw_json->>'longitude' AS NUMERIC), 2) AS longitude,
         raw_json
     FROM {{ source('meteo_bronze', 'api_openmeteo_raw_data') }}
     WHERE source_type = 'weather_forecast_hourly'
@@ -17,12 +17,13 @@ extracted_arrays AS (
     SELECT 
         raw_id,
         execution_date,
-        -- Lấy tọa độ
-        CAST(raw_json->>'latitude' AS NUMERIC) AS latitude,
-        CAST(raw_json->>'longitude' AS NUMERIC) AS longitude,
+        latitude,
+        longitude,
         
-        -- Ép kiểu chuỗi ISO thành Timestamp
-        CAST(t.time_str AS TIMESTAMP) AS forecast_time,
+        -- LỖI TIMEZONE ĐÃ ĐƯỢC FIX: Open-Meteo trả về giờ địa phương (Asia/Bangkok).
+        -- Nếu chỉ dùng TIMESTAMP, BI Tool sẽ hiểu nhầm là giờ UTC.
+        -- Phải dùng AT TIME ZONE để Postgres dịch chuẩn xác về TIMESTAMPTZ (UTC base).
+        CAST(t.time_str AS TIMESTAMP) AT TIME ZONE 'Asia/Bangkok' AS forecast_time,
         
         -- Dùng idx để "móc" dữ liệu ở các mảng khác tương ứng cùng vị trí
         -- Lưu ý: Index của PostgreSQL jsonb array bắt đầu từ 0, nên phải lấy idx - 1
