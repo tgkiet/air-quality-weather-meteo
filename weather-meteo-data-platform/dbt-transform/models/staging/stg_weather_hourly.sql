@@ -21,33 +21,28 @@ extracted_arrays AS (
         CAST(raw_json->>'latitude' AS NUMERIC) AS latitude,
         CAST(raw_json->>'longitude' AS NUMERIC) AS longitude,
         
-        -- Bung mảng 'time' ra thành nhiều dòng, kèm theo số thứ tự (index)
-        -- WITH ORDINALITY sẽ tạo ra cột 'idx' (bắt đầu từ 1, 2, 3...)
-        t.time_str,
-        t.idx
+        -- Ép kiểu chuỗi ISO thành Timestamp
+        CAST(t.time_str AS TIMESTAMP) AS forecast_time,
+        
+        -- Dùng idx để "móc" dữ liệu ở các mảng khác tương ứng cùng vị trí
+        -- Lưu ý: Index của PostgreSQL jsonb array bắt đầu từ 0, nên phải lấy idx - 1
+        CAST(raw_json->'hourly'->'temperature_2m'->>(t.idx::int - 1) AS NUMERIC) AS temperature_2m,
+        CAST(raw_json->'hourly'->'relative_humidity_2m'->>(t.idx::int - 1) AS NUMERIC) AS relative_humidity_2m,
+        CAST(raw_json->'hourly'->'dew_point_2m'->>(t.idx::int - 1) AS NUMERIC) AS dew_point_2m,
+        CAST(raw_json->'hourly'->'apparent_temperature'->>(t.idx::int - 1) AS NUMERIC) AS apparent_temperature,
+        CAST(raw_json->'hourly'->'precipitation_probability'->>(t.idx::int - 1) AS NUMERIC) AS precipitation_probability,
+        CAST(raw_json->'hourly'->'precipitation'->>(t.idx::int - 1) AS NUMERIC) AS precipitation,
+        CAST(raw_json->'hourly'->'pressure_msl'->>(t.idx::int - 1) AS NUMERIC) AS pressure_msl,
+        CAST(raw_json->'hourly'->'surface_pressure'->>(t.idx::int - 1) AS NUMERIC) AS surface_pressure,
+        CAST(raw_json->'hourly'->'cloud_cover'->>(t.idx::int - 1) AS NUMERIC) AS cloud_cover,
+        CAST(raw_json->'hourly'->'visibility'->>(t.idx::int - 1) AS NUMERIC) AS visibility,
+        CAST(raw_json->'hourly'->'wind_speed_10m'->>(t.idx::int - 1) AS NUMERIC) AS wind_speed_10m,
+        CAST(raw_json->'hourly'->'wind_direction_10m'->>(t.idx::int - 1) AS NUMERIC) AS wind_direction_10m,
+        CAST(raw_json->'hourly'->'wind_gusts_10m'->>(t.idx::int - 1) AS NUMERIC) AS wind_gusts_10m,
+        CAST(raw_json->'hourly'->'uv_index'->>(t.idx::int - 1) AS NUMERIC) AS uv_index
+        
     FROM source_data,
     LATERAL jsonb_array_elements_text(raw_json->'hourly'->'time') WITH ORDINALITY AS t(time_str, idx)
-),
-
-final_flattened AS (
-    SELECT 
-        e.raw_id,
-        e.execution_date,
-        e.latitude,
-        e.longitude,
-        
-        -- Ép kiểu chuỗi ISO thành Timestamp
-        CAST(e.time_str AS TIMESTAMP) AS forecast_time,
-        
-        -- Dùng lại idx để "móc" dữ liệu ở các mảng khác tương ứng cùng vị trí
-        -- Lưu ý: Index của PostgreSQL jsonb array bắt đầu từ 0, nên phải lấy idx - 1
-        CAST(s.raw_json->'hourly'->'temperature_2m'->>(e.idx::int - 1) AS NUMERIC) AS temperature_2m,
-        CAST(s.raw_json->'hourly'->'relative_humidity_2m'->>(e.idx::int - 1) AS NUMERIC) AS relative_humidity_2m,
-        CAST(s.raw_json->'hourly'->'precipitation_probability'->>(e.idx::int - 1) AS NUMERIC) AS precipitation_probability,
-        CAST(s.raw_json->'hourly'->'wind_speed_10m'->>(e.idx::int - 1) AS NUMERIC) AS wind_speed_10m
-        
-    FROM extracted_arrays e
-    JOIN source_data s ON e.raw_id = s.raw_id
 )
 
-SELECT * FROM final_flattened
+SELECT * FROM extracted_arrays

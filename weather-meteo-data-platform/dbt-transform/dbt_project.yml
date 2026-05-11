@@ -19,6 +19,8 @@ clean-targets:
 
 models:
   weather_meteo_transform:
-    # Mặc định, mọi bảng do dbt tạo ra trong thư mục models/ sẽ là dạng VIEW.
-    # Nhưng vì là Silver Layer, chúng ta cần nó là dạng TABLE hoặc INCREMENTAL.
-    +materialized: table
+    # Cấu hình Materialization theo Folder (Nguyên tắc OOP)
+    staging:
+      +materialized: view  # Tầng Staging chỉ tạo View ảo, nhẹ và nhanh
+    silver:
+      +materialized: table # Tầng Silver sẽ tạo Table vật lý (hoặc Incremental sau này)
