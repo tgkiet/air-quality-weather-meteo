@@ -5,26 +5,26 @@ sources:
     description: "Lớp dữ liệu thô (Bronze Layer) được lấy từ API Open-Meteo và load vào Postgres bởi Airflow."
     database: air_quality_db
     schema: public
-    
+
     tables:
       - name: api_openmeteo_raw_data
-        description: "Bảng chứa cục JSON nguyên bản chưa qua chế biến."
+        description: "Bảng chứa cục JSON raw chưa được xử lý"
         columns:
           - name: id
             description: "Khoá chính tự tăng"
             tests:
               - unique
               - not_null
-          
+
           - name: source_type
             description: "Đánh dấu dữ liệu thời tiết hay không khí"
             tests:
               - not_null
-              
+
           - name: execution_date
             description: "Mốc thời gian quy chiếu của batch Airflow (Logical Date)"
             tests:
               - not_null
-              
+
           - name: raw_json
             description: "Cục JSONB thô"
