@@ -12,7 +12,7 @@ Hệ thống dbt được thiết kế dựa trên nguyên tắc **Tách biệt 
 2. **`../.dbt/profiles.yml`**: Nơi lưu cấu hình kết nối Database. Tuyệt đối không hardcode mật khẩu, mọi kết nối được truyền qua biến môi trường (`{{ env_var('POSTGRES_USER') }}`) nạp từ file `.env`.
 3. **`dbt_project.yml`**: Trung tâm điều khiển dự án. Áp dụng cấu hình Materialization theo hướng đối tượng (Folder-based):
    - Mọi model trong `staging/` tự động biến thành `VIEW` ảo (Tiết kiệm dung lượng).
-   - Mọi model trong `silver/` tự động biến thành `TABLE` vật lý (Hoặc Incremental để tối ưu hiệu suất đọc ghi).
+   - Mọi model trong `silver/` tự động biến thành `TABLE` (cụ thể là `incremental` để tối ưu hiệu suất đọc ghi).
 
 ---
 
@@ -25,16 +25,21 @@ Hệ thống dbt được thiết kế dựa trên nguyên tắc **Tách biệt 
 
 ### 2. Tầng Tiền Xử Lý (Staging Layer)
 - **Vị trí:** `models/staging/`
-- **Các file hiện tại:** `stg_weather_hourly.sql`, `stg_air_quality_hourly.sql`
 - **Nhiệm vụ:**
-  - Lấy dữ liệu từ nguồn qua hàm `{{ source('meteo_bronze', 'api_openmeteo_raw_data') }}`.
+  - Lấy dữ liệu từ nguồn qua hàm `{{ source(...) }}`.
   - Bóc tách (Flatten) các mảng JSON song song phức tạp của API Open-Meteo bằng tuyệt kỹ PostgreSQL: `LATERAL jsonb_array_elements_text(...) WITH ORDINALITY`.
-  - Ép kiểu dữ liệu (Casting) từ chuỗi sang `NUMERIC`, `TIMESTAMP`.
-  - **Quy tắc Vàng:** KHÔNG thực hiện JOIN giữa các bảng logic khác nhau tại tầng này. Chỉ tập trung làm sạch một nguồn duy nhất. Tối ưu performance bằng cách gộp mọi logic bóc tách vào một CTE duy nhất.
+- **Tư Duy Tối Ưu (Enterprise Mindset):**
+  - **Micro-Optimization:** Đưa các hàm `ROUND()` để làm tròn tọa độ lên CTE trên cùng để chỉ chạy 1 lần/dòng, tránh bị lặp lại 24 lần trong vòng lặp `LATERAL`.
+  - **Timezone Shift Prevention:** Không dùng `TIMESTAMP` thuần túy. Bắt buộc dùng `AT TIME ZONE 'Asia/Bangkok'` và ép về `TIMESTAMPTZ` để Postgres chuyển đổi chuẩn xác múi giờ địa phương về giờ UTC gốc.
+  - **Float Jitter Prevention:** Làm tròn tọa độ 2 chữ số thập phân để chống nứt gãy Khóa Chính ở tầng Silver do API dao động ngầm.
 
-### 3. Tầng Tinh Chế (Silver Layer - Đang phát triển)
-- **Vị trí:** `models/silver/` (Sắp tạo)
-- **Nhiệm vụ:** Ghi dữ liệu vật lý với cơ chế **Incremental** (Tính Lũy đẳng). Chỉ đọc và ghi những bản ghi "mới xuất hiện" ở tầng Staging, không Full-Refresh quét lại toàn bộ dữ liệu lịch sử để chống quá tải database.
+### 3. Tầng Tinh Chế (Silver Layer)
+- **Vị trí:** `models/silver/`
+- **Nhiệm vụ:** Ghi dữ liệu vật lý với cơ chế **Incremental** (Tính Lũy đẳng). Chỉ đọc và ghi những bản ghi "mới xuất hiện", không Full-Refresh quét lại toàn bộ dữ liệu lịch sử để chống quá tải database.
+- **Tư Duy Tối Ưu (Enterprise Mindset):**
+  - **Data Duplication Prevention:** Dùng tuyệt kỹ `DISTINCT ON (forecast_time, ...)` kết hợp `ORDER BY execution_date DESC` để lọc bỏ các bản dự báo bị đè lên nhau giữa các lần gọi API. Nếu không có bước này, lệnh `MERGE` của dbt sẽ sập toàn hệ thống!
+  - **Idempotency:** Sử dụng `execution_date >= max(...)` để luôn bao quát các mẻ chạy Retry hoặc Backfill của Airflow mà không sinh ra rác dữ liệu.
+  - **Zero-Trust Testing:** Thiết lập file `models/silver/schema.yml` để áp dụng luật Test `not_null` lên 100% các cột Khóa Chính, tuyệt đối không tin tưởng dữ liệu đầu vào.
 
 ---
 
@@ -43,7 +48,6 @@ Hệ thống dbt được thiết kế dựa trên nguyên tắc **Tách biệt 
 Vì dbt chạy trong Docker, bạn cần dùng lệnh `docker exec` để "chui" vào container và ra lệnh.
 
 **1. Kiểm tra kết nối:**
-Kiểm tra xem file `profiles.yml` đã móc nối thành công vào PostgreSQL chưa.
 ```bash
 docker exec -it dbt_container dbt debug
 ```
@@ -53,9 +57,10 @@ Lệnh này sẽ compile các file `.sql` thành mã SQL chuẩn của Postgres 
 ```bash
 docker exec -it dbt_container dbt run
 ```
+*(Mẹo: Thêm cờ `--full-refresh` nếu bạn thay đổi cấu trúc bảng hoặc muốn dbt xóa bảng cũ xây lại từ đầu).*
 
 **3. Chạy kiểm duyệt dữ liệu (Data Tests):**
-Khởi chạy các bài test đã cài đặt trong file `sources.yml`.
+Khởi chạy hàng rào bảo vệ chất lượng dữ liệu (10 bài test ở Bronze & Silver).
 ```bash
 docker exec -it dbt_container dbt test
 ```
