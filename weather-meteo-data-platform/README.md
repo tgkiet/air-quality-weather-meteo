@@ -15,7 +15,7 @@
        ▼ Transform (dbt LATERAL + Idempotency)
 [PostgreSQL Silver] ──► Cleansed & Deduplicated Tables
        │
-       ▼ Transform (dbt JOIN)
+       ▼ Transform (dbt LEFT JOIN)
 [PostgreSQL Gold]   ──► Data Marts (Analytics-Ready)
 ```
 
@@ -27,6 +27,14 @@
 | **Transform** | dbt | Xử lý logic phức tạp (Flatten JSON, Timezone shift, Deduplication) |
 | **Infrastructure** | Docker Compose | Toàn bộ hệ thống chạy trong container|
 ---
+
+## Luồng chạy tự động sẽ là:
+1. Airflow kích hoạt 
+2. Python Tải API 
+3. Bơm vào Postgres 
+4. Airflow kích hoạt Dbt 
+5. Dbt Transform (Silver & Gold) 
+6. Dbt Test ➜ Xong! (Superset chỉ việc lấy lên vẽ)
 
 ## Mục Tiêu & Bài Toán Ứng Dụng (Business Value)
 
