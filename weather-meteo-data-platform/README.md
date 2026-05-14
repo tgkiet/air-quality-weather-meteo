@@ -4,21 +4,37 @@
 
 ---
 
-## Kiến Trúc Tổng Quan
+## Kiến Trúc Tổng Quan (Medallion Architecture)
 
 ```
-[Open-Meteo API] ──► [Extract] ──► [Load: PostgreSQL Bronze] ──► [dbt Transform: Silver → Gold]
-                          ↑
-                 [Airflow Scheduler @hourly]
+[Open-Meteo API (Forecast 7 Days)] 
+       │
+       ▼ Extract (Fail-fast OOP Python)
+[PostgreSQL Bronze] ──► Raw JSONB 
+       │
+       ▼ Transform (dbt LATERAL + Idempotency)
+[PostgreSQL Silver] ──► Cleansed & Deduplicated Tables
+       │
+       ▼ Transform (dbt JOIN)
+[PostgreSQL Gold]   ──► Data Marts (Analytics-Ready)
 ```
 
 | Tầng | Công Cụ | Vai Trò |
 |---|---|---|
-| **Orchestration** | Apache Airflow 3.2.0 | Tự động trigger pipeline mỗi đầu giờ |
-| **Extract & Load** | Python (OOP) | Gọi API, ghi raw JSON vào PostgreSQL |
-| **Storage** | PostgreSQL 16 | Data Warehouse (Bronze/Silver/Gold) |
-| **Transform** | dbt | SQL transform, dedup, parse JSON |
-| **Infrastructure** | Docker Compose | Toàn bộ hệ thống chạy trong container |
+| **Orchestration** | Apache Airflow 3.2.0 | Tự động trigger pipeline mỗi đầu giờ, truyền `execution_date` |
+| **Extract & Load** | Python (OOP) | Gọi API, ghi raw JSON vào PostgreSQL theo nguyên lý Lũy đẳng |
+| **Storage** | PostgreSQL 16 | Data Warehouse chứa 3 tầng kiến trúc (Bronze/Silver/Gold) |
+| **Transform** | dbt | Xử lý logic phức tạp (Flatten JSON, Timezone shift, Deduplication) |
+| **Infrastructure** | Docker Compose | Toàn bộ hệ thống chạy trong container|
+---
+
+## Mục Tiêu & Bài Toán Ứng Dụng (Business Value)
+
+Pipeline này không chỉ thu thập dữ liệu mà được thiết kế để giải quyết 3 bài toán lớn:
+
+1. **Hệ thống Cảnh báo Sức khỏe Chủ động (Proactive Health Alert System):** Sử dụng dữ liệu dự báo 7 ngày tới (Real-time Pipeline) để đưa ra các cảnh báo sớm về chỉ số PM2.5, UV, Nhiệt độ.
+2. **Thiết lập Đường cơ sở (Historical Baselines):** Kết hợp với 800.000 dòng dữ liệu lịch sử để tạo bối cảnh (Ví dụ: "PM2.5 ngày mai cao gấp đôi trung bình của 3 năm trước"). (OPTIONAL CHOICE)
+3. **Đánh giá Độ chính xác của Mô hình (Forecast vs. Actuals):** Lưu trữ lại các bản dự báo theo từng giờ để đối chiếu với dữ liệu thực tế, phục vụ việc đánh giá chất lượng của API hoặc làm input cho mô hình Machine Learning.(OPTIONAL CHOICE)
 
 ---
 
