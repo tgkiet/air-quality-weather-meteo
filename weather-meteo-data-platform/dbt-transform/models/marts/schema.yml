@@ -1,0 +1,67 @@
+version: 2
+
+models:
+  - name: mart_hourly_conditions
+    description: >
+      Bảng Data Mart (Tầng Gold) — Gộp dữ liệu Thời tiết và Chất lượng
+      không khí thành 1 bảng phẳng sẵn sàng cho BI Tools (Superset/Tableau).
+      Bao gồm các cột phân loại và cờ cảnh báo sức khỏe được tính toán sẵn.
+      Schema: gold_layer (tách biệt khỏi silver_layer để phân quyền RBAC).
+
+    columns:
+      # ── DIMENSIONS ────────────────────────────────────────────────────────
+      - name: forecast_time
+        description: "Mốc thời gian dự báo (TIMESTAMPTZ - chuẩn UTC)"
+        tests:
+          - not_null
+
+      - name: latitude
+        description: "Vĩ độ (đã làm tròn 2 chữ số thập phân)"
+        tests:
+          - not_null
+
+      - name: longitude
+        description: "Kinh độ (đã làm tròn 2 chữ số thập phân)"
+        tests:
+          - not_null
+
+      # ── DERIVED: LABELS ───────────────────────────────────────────────────
+      - name: temperature_level
+        description: >
+          Phân loại mức độ nhiệt độ: Mát mẻ / Dễ chịu / Nóng / Rất nóng / Nguy hiểm.
+          Trả về 'Chưa có dữ liệu' nếu temperature_2m là NULL.
+        tests:
+          - not_null
+
+      - name: uv_level
+        description: >
+          Phân loại chỉ số UV theo chuẩn WHO:
+          Thấp / Trung bình / Cao / Rất cao / Cực kỳ nguy hiểm.
+          Trả về 'Chưa có dữ liệu' nếu uv_index là NULL.
+        tests:
+          - not_null
+
+      - name: pm2_5_level
+        description: >
+          Phân loại nồng độ PM2.5 theo chuẩn AQI:
+          Tốt / Trung bình / Không lành mạnh / Rất không lành mạnh / Nguy hiểm.
+          Trả về 'Chưa có dữ liệu' nếu ngoài tầm dự báo (~ngày 6-7).
+        tests:
+          - not_null
+
+      # ── DERIVED: ALERT FLAGS ──────────────────────────────────────────────
+      - name: is_weather_alert
+        description: >
+          Cờ cảnh báo thời tiết (TRUE/FALSE — KHÔNG BAO GIỜ NULL).
+          TRUE nếu: UV Index >= 8 HOẶC Nhiệt độ >= 38°C.
+          Chỉ dựa vào dữ liệu thời tiết (luôn đủ 7 ngày) để đảm bảo không NULL.
+        tests:
+          - not_null
+
+      - name: is_air_quality_alert
+        description: >
+          Cờ cảnh báo chất lượng không khí (TRUE/FALSE/NULL).
+          TRUE  = PM2.5 >= 55 µg/m³ (Ô nhiễm nặng).
+          FALSE = PM2.5 < 55 µg/m³ (Trong ngưỡng an toàn).
+          NULL  = Chưa có dữ liệu dự báo (ngày 6-7).
+          Lưu ý: NULL ≠ FALSE. Dashboard nên hiển thị 'N/A' thay vì tích xanh.

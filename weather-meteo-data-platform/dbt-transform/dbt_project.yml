@@ -19,8 +19,15 @@ clean-targets:
 
 models:
   weather_meteo_transform:
-    # Cấu hình Materialization theo Folder (Nguyên tắc OOP)
+    # Cấu hình Materialization theo Folder (Nguyên tắc OOP - DRY)
+    # Quy tắc: Cấu hình ở đây là DEFAULT. File .sql chỉ override khi có lý do đặc biệt.
     staging:
-      +materialized: view  # Tầng Staging chỉ tạo View ảo, nhẹ và nhanh
+      +materialized: view       # VIEW ảo: nhẹ, nhanh, không tốn dung lượng ổ cứng
     silver:
-      +materialized: table # Tầng Silver sẽ tạo Table vật lý (hoặc Incremental sau này)
+      +materialized: incremental # INCREMENTAL: Chỉ ghi dữ liệu MỚI, không quét lại lịch sử
+    marts:
+      +materialized: table       # TABLE vật lý: Tầng Gold được đọc liên tục bởi BI Tools
+      +schema: gold_layer        # Tạo schema RIÊNG BIỆT cho Tầng Gold
+                                  # Lý do: Phân tách quyền truy cập (RBAC):
+                                  #   - Data Engineer: Có quyền vào silver_layer
+                                  #   - Data Analyst:  Chỉ được GRANT SELECT vào gold_layer
