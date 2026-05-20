@@ -28,13 +28,12 @@
 | **Infrastructure** | Docker Compose | Toàn bộ hệ thống chạy trong container|
 ---
 
-## Luồng chạy tự động sẽ là:
-1. Airflow kích hoạt 
-2. Python Tải API 
-3. Bơm vào Postgres 
-4. Airflow kích hoạt Dbt 
-5. Dbt Transform (Silver & Gold) 
-6. Dbt Test ➜ Xong! (Superset chỉ việc lấy lên vẽ)
+## Luồng Tự Động Hóa Toàn Diện (Airflow + dbt)
+
+Hệ thống đã đạt đến cấp độ tự động hóa hoàn toàn (End-to-End ELT Pipeline). Mỗi đầu giờ, DAG sẽ kích hoạt chuỗi 3 Tasks:
+1. `fetch_data`: **Python** Extract & Load (Kéo API đẩy thẳng vào Bronze).
+2. `dbt_run`: **Airflow** kích hoạt trực tiếp **dbt CLI** (không dùng Docker Socket rủi ro bảo mật). Chạy tuần tự `Staging` ➜ `Silver` (Clean/Dedup) ➜ `Gold` (Denormalize/Derived Metrics).
+3. `dbt_test`: **Data Quality Gate** — Chạy 17 bài Test kiểm duyệt chất lượng. Chỉ khi dữ liệu hoàn toàn sạch sẽ không bị NULL sai quy định, toàn bộ Pipeline mới được đánh dấu là SUCCESS.
 
 ## Mục Tiêu & Bài Toán Ứng Dụng (Business Value)
 
