@@ -35,6 +35,12 @@ services:
       - ./airflow/logs:/opt/airflow/logs
       - ./src:/opt/airflow/src
       - ./.env:/opt/airflow/.env
+      # Mount thư mục dbt project để Airflow có thể gọi "dbt run" trực tiếp
+      # mà KHÔNG cần Docker socket (an toàn hơn phương pháp docker exec).
+      - ./dbt-transform:/opt/airflow/dbt-transform
+      # Mount profiles.yml để dbt trong Airflow biết cách kết nối PostgreSQL.
+      # dbt tìm profiles.yml theo thứ tự: --profiles-dir arg > ~/.dbt/ > ./
+      - ./.dbt:/home/airflow/.dbt
     depends_on:
       - postgres_db
     networks:

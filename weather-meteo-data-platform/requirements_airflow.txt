@@ -1,3 +1,14 @@
 psycopg2-binary==2.9.11
 python-dotenv==1.0.1
 requests==2.32.3
+# dbt: Cài trực tiếp trong Airflow container để BashOperator gọi "dbt run/test"
+# mà KHÔNG cần Docker socket (an toàn hơn docker exec).
+#
+# QUAN TRỌNG: Pin CẢ HAI dbt-core VÀ dbt-postgres về cùng version 1.9.0.
+# Nếu chỉ pin dbt-postgres==1.9.0, pip tự kéo dbt-core phiên bản mới nhất
+# (1.11.x) vì dbt-postgres 1.9.0 chỉ khai báo "dbt-core>=1.9.0" (không giới hạn trên).
+# → Core và Adapter khác major version → API không tương thích → lỗi khi chạy.
+#
+# Version 1.9.0 phải khớp với image dbt_container: ghcr.io/dbt-labs/dbt-postgres:1.9.latest
+dbt-core==1.9.0
+dbt-postgres==1.9.0
