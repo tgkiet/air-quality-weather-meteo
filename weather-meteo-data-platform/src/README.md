@@ -1,4 +1,4 @@
-# 🐍 Source Code — Extract & Load Layer
+# Source Code — Extract & Load Layer
 
 Thư mục `src/` chứa toàn bộ logic Python thực hiện **Bước E (Extract)** và **Bước L (Load)** trong cấu trúc ELT. Dựa trên triết lý **Twelve-Factor App**, **Separation of Concerns**, và **Idempotency**.
 
@@ -30,7 +30,7 @@ src/
 
 ---
 
-## 📖 Documentation Chi Tiết
+## Documentation Chi Tiết
 
 | Module | Nội dung |
 |---|---|
@@ -110,3 +110,10 @@ bash_command='python3 /opt/airflow/src/main.py --execution_date "{{ logical_date
 | `aerosol_optical_depth` | — | Độ đục quang học |
 | `dust` | μg/m³ | Bụi thô |
 | `uv_index` | — | Chỉ số UV |
+
+# Tiến hành Backfill dữ liệu cũ đã crawl thành file csv lúc trước
+- Load toàn bộ dữ liệu từ file csv vào DB
+- Sử dụng dbt để transform dữ liệu từ Bronze lên Silver và Gold
+- Dữ liệu được lưu trữ ở định dạng Parquet (dùng Pandas để đọc và lưu)
+- Sử dụng dbt để transform dữ liệu từ Bronze lên Silver và Gold
+- Lưu ý: về lựa chọn chiến lược để làm, kiến trúc để backfill
