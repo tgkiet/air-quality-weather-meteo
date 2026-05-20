@@ -110,6 +110,8 @@ Models dbt trong `models/marts/`:
 │  └─────────────────────────┘       │  - ./airflow/dags → /dags   │ │
 │                                    │  - ./airflow/logs → /logs   │ │
 │                                    │  - ./src → /opt/airflow/src │ │
+│                                    │  - ./dbt-transform (dbt)    │ │
+│                                    │  - ./.dbt (profiles.yml)    │ │
 │                                    └──────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -149,11 +151,23 @@ Models dbt trong `models/marts/`:
         │
         └── [3. LOAD vào PostgreSQL]
                 PostgresLoader()
-                .connect()  ← đọc POSTGRES_* từ env, retry 3 lần
-                .insert_data("api_openmeteo_raw_data", "weather_forecast_hourly", ...)
-                .insert_data("api_openmeteo_raw_data", "air_quality_hourly", ...)
+                .connect()
+                .insert_data("api_openmeteo_raw_data", ...)
                 .close()
                 └── Kết quả: +2 rows trong Bronze table
+        
+        ▼
+[BashOperator: dbt_run]
+        │ bash_command: "dbt run --project-dir ... --profiles-dir ..."
+        ├── 1. Staging (Tạo View, Flatten JSON)
+        ├── 2. Silver (Incremental Merge, Dedup dữ liệu)
+        └── 3. Gold (Denormalize, LEFT JOIN tạo Data Marts)
+        
+        ▼
+[BashOperator: dbt_test]
+        │ bash_command: "dbt test --project-dir ... --profiles-dir ..."
+        └── Chạy 17 bài Data Quality Tests (NotNull, Unique).
+            Nếu Pass → Pipeline SUCCESS. Nếu Fail → Pipeline FAILED.
 ```
 
 **Nếu bất kỳ bước nào raise Exception:**

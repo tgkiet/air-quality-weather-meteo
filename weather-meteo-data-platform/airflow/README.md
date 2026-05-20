@@ -33,17 +33,20 @@ airflow/
 
 ```
 [fetch_data]
-     │
-     └── BashOperator
-         bash_command: "python3 /opt/airflow/src/main.py"
+     │ (Python Extract & Load)
+     ▼
+[dbt_run]
+     │ (Transform: Staging → Silver → Gold)
+     ▼
+[dbt_test]
+       (Data Quality Gate - 17 Tests)
 ```
 
-Hiện tại DAG chỉ có **1 task duy nhất** (`fetch_data`) để giữ sự đơn giản. Khi tích hợp dbt, sẽ thêm task `transform_data` chạy sau:
+Hiện tại DAG đã được hoàn thiện với **3 tasks chạy nối tiếp nhau** (Dependencies). 
+- `fetch_data`: Kéo dữ liệu từ API nạp vào bảng Bronze bằng Python.
+- `dbt_run`: Kích hoạt dbt CLI ngay bên trong Airflow container để chạy các lệnh Transform, biến đổi dữ liệu từ Bronze lên Silver và Gold.
+- `dbt_test`: Chạy 17 bài Data Tests để đảm bảo chất lượng. Nếu dữ liệu có lỗi NULL sai quy định, toàn bộ Pipeline sẽ bị đánh dấu là FAILED.
 
-```
-[fetch_data] ──► [transform_data]
-(Extract + Load)   (dbt run)
-```
 
 ### Tại Sao Dùng `@hourly` Thay Vì `timedelta(hours=1)`?
 
