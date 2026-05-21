@@ -1,4 +1,4 @@
-# 🏗️ Kiến Trúc Hệ Thống
+# Kiến Trúc Hệ Thống
 
 Tài liệu này mô tả chi tiết kiến trúc dữ liệu, luồng xử lý và các quyết định kỹ thuật của hệ thống.
 
@@ -44,7 +44,7 @@ Hệ thống áp dụng mô hình **ELT** (Extract → Load → Transform), tác
 
 ## Medallion Architecture (Bronze → Silver → Gold)
 
-### 🥉 Bronze Layer — Raw Data
+### Bronze Layer — Raw Data
 
 | Thuộc Tính | Giá Trị |
 |---|---|
@@ -67,7 +67,7 @@ CREATE TABLE api_openmeteo_raw_data (
 
 > **Tại sao JSONB?** PostgreSQL JSONB cho phép lưu response API mà không cần schema cứng, đồng thời hỗ trợ index và query trực tiếp vào các field JSON với toán tử `->` và `->>`.
 
-### 🥈 Silver Layer — Staging
+### Silver Layer — Staging
 
 Models dbt trong `models/staging/`:
 
@@ -80,7 +80,7 @@ Các phép biến đổi áp dụng:
 3. **Type Casting** — `TEXT` → `FLOAT`, `TEXT` → `TIMESTAMPTZ`
 4. **Renaming** — đổi tên cột theo convention `snake_case`
 
-### 🥇 Gold Layer — Marts
+### Gold Layer — Marts
 
 Models dbt trong `models/marts/`:
 
@@ -166,7 +166,7 @@ Models dbt trong `models/marts/`:
         ▼
 [BashOperator: dbt_test]
         │ bash_command: "dbt test --project-dir ... --profiles-dir ..."
-        └── Chạy 17 bài Data Quality Tests (NotNull, Unique).
+        └── Chạy 29 bài Data Quality Tests (NotNull, Unique, AcceptedValues).
             Nếu Pass → Pipeline SUCCESS. Nếu Fail → Pipeline FAILED.
 ```
 

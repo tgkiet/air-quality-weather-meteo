@@ -1,4 +1,4 @@
-# 🔄 dbt-transform/ — Transform Layer (Silver & Gold)
+# dbt-transform/ — Transform Layer (Silver & Gold)
 
 > Toàn bộ logic **Transform** trong chuỗi ELT. Biến đổi JSON thô từ Bronze thành bảng phẳng, sạch, sẵn sàng cho BI. Sử dụng **dbt 1.9.0** với `dbt-postgres` tích hợp trực tiếp vào Airflow container.
 
@@ -83,7 +83,7 @@ ORDER BY forecast_time, latitude, longitude, execution_date DESC
 **Logic giải thích:**
 - `execution_date DESC` → DISTINCT ON giữ bản dự báo **mới nhất** cho mỗi (giờ, vị trí)
 - `> max(execution_date)` thay vì `>=` → không reprocess batch cuối mỗi giờ
-- dbt `unique_key = ['forecast_time', 'latitude', 'longitude', 'location_name']` → MERGE đúng
+- dbt `unique_key = ['forecast_time', 'latitude', 'longitude']` → MERGE đúng
 
 ---
 

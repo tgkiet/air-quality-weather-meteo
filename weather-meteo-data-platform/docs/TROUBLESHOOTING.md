@@ -1,4 +1,4 @@
-# 🔧 Xử Lý Sự Cố (Troubleshooting)
+# Xử Lý Sự Cố (Troubleshooting)
 
 Hướng dẫn chẩn đoán và khắc phục các lỗi thường gặp trong hệ thống.
 
@@ -24,7 +24,7 @@ cat logs/pipeline.log | tail -n 100
 
 ## Lỗi Thường Gặp
 
-### ❌ Không đăng nhập được Airflow UI — "Invalid credentials"
+### Không đăng nhập được Airflow UI — "Invalid credentials"
 
 **Nguyên nhân có thể:**
 - Biến `_AIRFLOW_WWW_USER_USERNAME` / `_AIRFLOW_WWW_USER_PASSWORD` trong `.env` chưa đúng
@@ -41,7 +41,7 @@ docker exec airflow_container airflow users reset-password -u <username> -p <new
 
 ---
 
-### ❌ Airflow container crash ngay khi khởi động
+### Airflow container crash ngay khi khởi động
 
 **Kiểm tra log:**
 ```bash
@@ -58,7 +58,7 @@ docker logs airflow_container | tail -n 50
 
 ---
 
-### ❌ Task `fetch_data` bị FAILED trong Airflow
+### Task `fetch_data` bị FAILED trong Airflow
 
 **Bước 1 — Xem log trong Airflow UI:**
 ```
@@ -82,7 +82,7 @@ cat logs/pipeline.log | grep -i "error" | tail -n 20
 
 ---
 
-### ❌ Postgres không tạo được 2 Database
+### Postgres không tạo được 2 Database
 
 **Dấu hiệu:** Task pipeline lỗi `relation does not exist` hoặc `database does not exist`.
 
@@ -102,7 +102,7 @@ docker exec postgres_container psql -U <POSTGRES_USER> -l
 
 ---
 
-### ❌ DAG không xuất hiện trong Airflow UI
+### DAG không xuất hiện trong Airflow UI
 
 **Kiểm tra:**
 ```bash
@@ -123,7 +123,7 @@ docker logs airflow_container | grep -i "error\|import error"
 
 ---
 
-### ❌ Pipeline kết nối DB thành công ở local nhưng FAILED trong Airflow
+### Pipeline kết nối DB thành công ở local nhưng FAILED trong Airflow
 
 **Nguyên nhân:** Khi chạy bên trong Docker, phải dùng tên service `postgres_db` làm host, không phải `localhost`.
 
@@ -132,8 +132,8 @@ docker logs airflow_container | grep -i "error\|import error"
 services:
   airflow:
     environment:
-      POSTGRES_HOST: postgres_db   # ✅ Đúng — tên service trong Docker network
-      POSTGRES_PORT: 5432          # ✅ Port nội bộ trong Docker
+      POSTGRES_HOST: postgres_db   # Đúng — tên service trong Docker network
+      POSTGRES_PORT: 5432          # Port nội bộ trong Docker
 ```
 
 Đảm bảo 2 dòng này có trong section `environment` của service `airflow`.
@@ -161,7 +161,7 @@ conn = psycopg2.connect(
     user=os.getenv('POSTGRES_USER'),
     password=os.getenv('POSTGRES_PASSWORD')
 )
-print('✅ Kết nối thành công!')
+print('Kết nối thành công!')
 conn.close()
 "
 

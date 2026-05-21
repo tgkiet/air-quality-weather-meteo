@@ -16,11 +16,11 @@
 
 Dự án bắt đầu là một script đơn giản crawl CSV từ API Open-Meteo cho toạ độ TP.HCM. Sau khi backfill dữ liệu lịch sử Hà Nội từ CSV, hệ thống được nâng cấp toàn diện thành một **Data Platform hoàn chỉnh** với:
 
-- ✅ **Medallion Architecture** (Bronze → Silver → Gold)
-- ✅ **Idempotency** đầy đủ tại mọi tầng (UPSERT everywhere)
-- ✅ **20 grid cells** (10 HN + 10 HCM) sau khi prune config khỏp với API grid resolution
-- ✅ **29 Data Quality Tests** tự động qua dbt
-- ✅ **Dockerized** hoàn toàn với healthcheck và RBAC-ready schema
+- **Medallion Architecture** (Bronze → Silver → Gold)
+- **Idempotency** đầy đủ tại mọi tầng (UPSERT everywhere)
+- **20 grid cells** (10 HN + 10 HCM) sau khi prune config khỏp với API grid resolution
+- **29 Data Quality Tests** tự động qua dbt
+- **Dockerized** hoàn toàn với healthcheck và RBAC-ready schema
 
 ---
 
@@ -83,11 +83,11 @@ air-quality-weather-meteo/
 ├── 📁 Open-Meteo-Dataset/              ← Raw CSV lịch sử Hà Nội 2022-2025
 │   └── hanoi_aq_weather_MERGED.csv     ← (gitignore — liên hệ để nhận file)
 │
-└── 📁 weather-meteo-data-platform/     ← ⭐ Core Platform (toàn bộ hệ thống)
+└── 📁 weather-meteo-data-platform/     ← Core Platform (toàn bộ hệ thống)
     ├── 📄 README.md                    ← Platform overview & Quick Start
     ├── 📄 docker-compose.yml           ← Infra: Postgres + Airflow
     ├── 📄 Dockerfile                   ← Airflow + dbt image
-    ├── 📄 .env                         ← ⚠️ Credentials (không commit)
+    ├── 📄 .env                         ← không commit
     │
     ├── 📁 src/                         ← Extract & Load Layer
     │   ├── 📄 README.md
@@ -152,7 +152,7 @@ docker exec airflow_container \
     --start-date 2025-11-30 --end-date 2026-05-19
 ```
 
-> 🔄 **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`
+> **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`
 
 ---
 

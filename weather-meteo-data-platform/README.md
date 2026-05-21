@@ -218,7 +218,7 @@ docker exec airflow_container bash -c \
 weather-meteo-data-platform/
 ├── docker-compose.yml          # Infra: Postgres (healthcheck) + Airflow
 ├── Dockerfile                  # Airflow + dbt-postgres
-├── .env                        # ⚠️ Credentials — không commit Git
+├── .env                        # không commit Git
 │
 ├── src/
 │   ├── config/config.json      # 53 locations + API URLs/params

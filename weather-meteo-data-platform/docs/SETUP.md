@@ -1,4 +1,4 @@
-# ⚙️ Setup & Cấu Hình
+# Setup & Cấu Hình
 
 Hướng dẫn đầy đủ để thiết lập môi trường, cấu hình biến và chạy hệ thống từ đầu.
 
@@ -17,7 +17,7 @@ Hướng dẫn đầy đủ để thiết lập môi trường, cấu hình bi�
 
 ## Tạo File `.env`
 
-> ⚠️ **File `.env` KHÔNG được commit lên Git.** Tạo thủ công tại thư mục `weather-meteo-data-platform/`.
+> **File `.env` KHÔNG được commit lên Git.** Tạo thủ công tại thư mục `weather-meteo-data-platform/`.
 
 ```env
 # --- CẤU HÌNH DATABASE CHÍNH (RAW DATA) ---
@@ -60,7 +60,7 @@ AIRFLOW_API_SECRET_KEY=your_random_64_byte_hex_key
 | `AIRFLOW_UID` | UID user chạy Airflow trong container | `docker-compose.yml` |
 | `AIRFLOW_API_SECRET_KEY` | Secret key bảo vệ API endpoint Airflow | `docker-compose.yml` |
 
-> 💡 **Quan trọng về `POSTGRES_HOST`:**
+> **Quan trọng về `POSTGRES_HOST`:**
 > - Khi chạy `python src/main.py` **trực tiếp trên máy**: `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5434`
 > - Khi Airflow chạy task **bên trong Docker container**: `POSTGRES_HOST=postgres_db`, `POSTGRES_PORT=5432`
 >
@@ -117,7 +117,7 @@ Quá trình tự động diễn ra theo thứ tự:
 
 ### Reset toàn bộ (xóa sạch data)
 
-> ⚠️ Lệnh `-v` xóa **toàn bộ dữ liệu** PostgreSQL. Chỉ dùng khi thay đổi cấu hình DB cốt lõi.
+> Lệnh `-v` xóa **toàn bộ dữ liệu** PostgreSQL. Chỉ dùng khi thay đổi cấu hình DB cốt lõi.
 
 ```bash
 docker compose down -v && docker compose up -d

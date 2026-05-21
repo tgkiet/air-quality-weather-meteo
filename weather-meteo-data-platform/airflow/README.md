@@ -1,4 +1,4 @@
-# ✈️ airflow/ — Orchestration Layer
+# airflow/ — Orchestration Layer
 
 > **Apache Airflow 3.2.0** điều phối toàn bộ pipeline theo lịch `@hourly`, đảm bảo Idempotency qua `logical_date`, tự động retry và báo lỗi.
 
@@ -81,12 +81,12 @@ bash_command='python3 /opt/airflow/src/main.py --execution_date "{{ logical_date
 ## Cơ Chế Phát Hiện Lỗi Thực
 
 ```python
-# ❌ Sai — Airflow đánh SUCCESS giả, không biết có lỗi
+# Sai — Airflow đánh SUCCESS giả, không biết có lỗi
 except Exception as e:
     logger.error(e)
     return  # exit code = 0
 
-# ✅ Đúng — Airflow nhận FAILED, trigger retry
+# Đúng — Airflow nhận FAILED, trigger retry
 except Exception as e:
     logger.error(e)
     raise   # exit code ≠ 0

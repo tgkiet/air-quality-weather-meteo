@@ -42,8 +42,8 @@ Chỉ retry với các mã HTTP báo lỗi SERVER hoặc QUÁ TẢI:
 **Tham số:**
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `params` | `dict` | ✅ | Query parameters gửi lên API (latitude, longitude, hourly...) |
-| `expected_keys` | `set` | ❌ | Tập hợp các key BẮT BUỘC phải có trong response JSON |
+| `params` | `dict` | có | Query parameters gửi lên API (latitude, longitude, hourly...) |
+| `expected_keys` | `set` | không | Tập hợp các key BẮT BUỘC phải có trong response JSON |
 
 **Luồng xử lý bên trong:**
 ```
@@ -53,7 +53,7 @@ Chỉ retry với các mã HTTP báo lỗi SERVER hoặc QUÁ TẢI:
 4. Defensive check: raw_data có chứa {"error": true} không?
 5. Data Contract: raw_data có đủ expected_keys không?
 6. Nested check: nếu "hourly" trong expected_keys, raw_data["hourly"] có "time" không?
-7. return raw_data ✅
+7. return raw_data
 ```
 
 **Exception handling:**
