@@ -1,6 +1,6 @@
-# ☁️ Vietnam Weather & Air Quality Data Platform
+# ☁️ Vietnam Weather & Air Quality Data Platform ☁️
 
-> **Enterprise-grade Data Engineering pipeline** — tự động thu thập, chuẩn hóa và phân tích dữ liệu **thời tiết & chất lượng không khí** cho **20 khu vực quan trắc** trên 2 thành phố: **10 grid cells Hà Nội** và **10 grid cells TP.HCM**, cập nhật mỗi giờ, lịch sử từ năm 2022.
+> **Enterprise-grade Data Engineering pipeline** - tự động thu thập, chuẩn hóa và phân tích dữ liệu **thời tiết & chất lượng không khí** cho **20 khu vực quan trắc** trên 2 thành phố: **10 grid cells Hà Nội** và **10 grid cells TP.HCM**, cập nhật mỗi giờ, lịch sử từ năm 2022.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.13-blue?logo=python" />
@@ -129,9 +129,8 @@ docker compose up -d --build
 # Truy cập Airflow UI
 open http://localhost:8080
 
-# ─────────────────────────────────────────────────────────────────
+
 # Nạp dữ liệu lịch sử (chạy 1 lần, theo thứ tự sau)
-# ─────────────────────────────────────────────────────────────────
 
 # Bước 1: Nạp 2 file CSV Hà Nội (2022-08-02 → 2025-11-29 · ~900k dòng · nhanh)
 # CSV được tự động tìm tại /opt/airflow/csv-data/ (Docker volume mount từ Open-Meteo-Dataset/)
@@ -152,7 +151,7 @@ docker exec airflow_container \
     --start-date 2025-11-30 --end-date 2026-05-19
 ```
 
-> **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`
+> ⚠️ **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`
 
 ---
 
@@ -185,4 +184,4 @@ docker exec airflow_container \
 ## Liên Hệ
 
 - **Email:** giakiet.work@gmail.com
-- **Dataset:** Dữ liệu CSV gitignore do dung lượng lớn — liên hệ để nhận file
+- **Dataset:** Dữ liệu CSV gitignore do dung lượng lớn - liên hệ để nhận file

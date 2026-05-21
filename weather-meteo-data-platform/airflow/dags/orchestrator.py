@@ -2,10 +2,8 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
 
-# ==============================================================================
-# DEFAULT ARGS — Cấu hình mặc định áp dụng cho toàn bộ các Task trong DAG này.
+# DEFAULT ARGS - Cấu hình mặc định áp dụng cho toàn bộ các Task trong DAG này.
 # Tách riêng ra để tuân thủ nguyên tắc DRY (Don't Repeat Yourself).
-# ==============================================================================
 default_args = {
     'owner': 'gkinhere-airflow',
     'description': 'Orchestrator DAG for OpenMeteo Weather & Air Quality ELT pipeline (53 locations)',
@@ -17,21 +15,16 @@ default_args = {
     'start_date': datetime(2026, 5, 1),
 }
 
-# ==============================================================================
 # DAG DEFINITION
-# ==============================================================================
 with DAG(
     dag_id='open_meteo_api_pipeline_orchestrator',
     default_args=default_args,
     schedule='@hourly',
-    # catchup=False: Không chạy bù các kỳ đã qua khi DAG lần đầu được bật.
     # Chỉnh thành True khi cần Backfill dữ liệu lịch sử.
     catchup=False,
 ) as dag:
 
-    # ==========================================================================
     # TASK 1: EXTRACT & LOAD (E → L)
-    # ==========================================================================
     # Jinja Templating: {{ logical_date | ts }} inject Logical Date của Airflow
     # vào main.py qua tham số --execution_date.
     #
@@ -47,9 +40,7 @@ with DAG(
         ),
     )
 
-    # ==========================================================================
     # TASK 2: TRANSFORM — dbt run (T)
-    # ==========================================================================
     # Cơ chế: Gọi lệnh "dbt run" trực tiếp bên trong airflow_container.
     # dbt-postgres đã được cài sẵn qua requirements_airflow.txt.
     #
@@ -69,9 +60,7 @@ with DAG(
         ),
     )
 
-    # ==========================================================================
     # TASK 3: DATA QUALITY GATE — dbt test (Validate)
-    # ==========================================================================
     # Chạy SAU dbt_run. Nếu test FAILED, Airflow đánh dấu task này là FAILED.
     # Các lần chạy tiếp theo sẽ biết là có vấn đề ở data quality.
     #
@@ -88,21 +77,15 @@ with DAG(
         ),
     )
 
-    # ==========================================================================
-    # TASK DEPENDENCIES — Thứ tự chạy
-    # ==========================================================================
+    # TASK DEPENDENCIES - Thứ tự chạy
     # Đọc: fetch_data PHẢI hoàn thành → dbt_run mới được kích hoạt
     #      dbt_run  PHẢI hoàn thành → dbt_test mới được kích hoạt
-    #
     # Nếu fetch_data FAILED → dbt_run và dbt_test bị SKIP (không chạy).
     # Đảm bảo không Transform dữ liệu rác khi bước Load thất bại.
     fetch_data >> dbt_run >> dbt_test
 
-
-# ==============================================================================
-# DESIGN NOTES:
+# DESIGN NOTES
 # Tại sao không tách fetch_weather và fetch_aq thành 2 Task riêng?
 #   → Vì cả 2 đều gọi chung API Open-Meteo, chia sẻ cùng session HTTP.
 #   → Tách ra = over-engineering + risk duplicate connection + khó maintain.
 #   → Pipeline này chọn gộp 1 Task = đơn giản, đủ dùng, dễ debug.
-# ==============================================================================
