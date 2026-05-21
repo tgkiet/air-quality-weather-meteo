@@ -1,2 +1,1 @@
-*.ipynb linguist-detectable=false
-notebooks/** linguist-detectable=false
+Open-Meteo-Dataset/*.ipynb linguist-vendored
