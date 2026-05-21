@@ -1,14 +1,42 @@
 
 
-WITH source_data AS (
-    SELECT 
-        id as raw_id,
+WITH raw_records AS (
+    SELECT
+        id AS raw_id,
         CAST(execution_date AS TIMESTAMPTZ) AS execution_date,
-        ROUND(CAST(raw_json->>'latitude' AS NUMERIC), 2) AS latitude,
-        ROUND(CAST(raw_json->>'longitude' AS NUMERIC), 2) AS longitude,
-        raw_json
+        single_json
     FROM {{ source('meteo_bronze', 'api_openmeteo_raw_data') }}
+    CROSS JOIN LATERAL (
+        SELECT 
+            CASE 
+                WHEN jsonb_typeof(raw_json) = 'array' THEN raw_json
+                ELSE jsonb_build_array(raw_json)
+            END AS arr
+    ) AS array_wrapper
+    CROSS JOIN LATERAL jsonb_array_elements(array_wrapper.arr) AS single_json
     WHERE source_type = 'air_quality_hourly'
+),
+
+source_data AS (
+    SELECT 
+        raw_id,
+        execution_date,
+        CASE 
+            WHEN single_json->>'requested_latitude' IS NOT NULL 
+                THEN ROUND(CAST(single_json->>'requested_latitude' AS NUMERIC), 4)
+            WHEN ROUND(CAST(single_json->>'latitude' AS NUMERIC), 1) = 10.8 
+                THEN 10.78
+            ELSE ROUND(CAST(single_json->>'latitude' AS NUMERIC), 4)
+        END AS latitude,
+        CASE 
+            WHEN single_json->>'requested_longitude' IS NOT NULL 
+                THEN ROUND(CAST(single_json->>'requested_longitude' AS NUMERIC), 4)
+            WHEN ROUND(CAST(single_json->>'longitude' AS NUMERIC), 1) = 106.7 
+                THEN 106.70
+            ELSE ROUND(CAST(single_json->>'longitude' AS NUMERIC), 4)
+        END AS longitude,
+        single_json AS raw_json
+    FROM raw_records
 ),
 
 extracted_arrays AS (

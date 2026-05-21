@@ -1,6 +1,6 @@
-# ☁️ Weather & Air Quality Data Platform
+# ☁️ Vietnam Weather & Air Quality Data Platform
 
-> Pipeline dữ liệu tự động theo chuẩn **Data Engineering Enterprise** — thu thập, lưu trữ và xử lý dữ liệu thời tiết & chất lượng không khí TP.HCM mỗi giờ, hoàn toàn tự động.
+> Pipeline dữ liệu tự động quy mô quốc gia theo chuẩn **Data Engineering Enterprise** — tích hợp và đồng bộ hóa dữ liệu thời tiết & chất lượng không khí của **31 trạm quan trắc tại Hà Nội** và **22 quận/huyện tại TP.HCM**
 
 ---
 
@@ -40,7 +40,7 @@ Hệ thống đã đạt đến cấp độ tự động hóa hoàn toàn (End-t
 Pipeline này không chỉ thu thập dữ liệu mà được thiết kế để giải quyết 3 bài toán lớn:
 
 1. **Hệ thống Cảnh báo Sức khỏe Chủ động (Proactive Health Alert System):** Sử dụng dữ liệu dự báo 7 ngày tới (Real-time Pipeline) để đưa ra các cảnh báo sớm về chỉ số PM2.5, UV, Nhiệt độ.
-2. **Thiết lập Đường cơ sở (Historical Baselines):** Kết hợp với 800.000 dòng dữ liệu lịch sử để tạo bối cảnh (Ví dụ: "PM2.5 ngày mai cao gấp đôi trung bình của 3 năm trước"). (OPTIONAL CHOICE)
+2. **Thiết lập Đường cơ sở (Historical Baselines):** Tích hợp hơn 900.000 dòng dữ liệu lịch sử từ các tệp CSV để tạo bối cảnh phân tích xu hướng lâu dài (từ năm 2022 đến nay).
 3. **Đánh giá Độ chính xác của Mô hình (Forecast vs. Actuals):** Lưu trữ lại các bản dự báo theo từng giờ để đối chiếu với dữ liệu thực tế, phục vụ việc đánh giá chất lượng của API hoặc làm input cho mô hình Machine Learning.(OPTIONAL CHOICE)
 
 ---
@@ -52,6 +52,8 @@ weather-meteo-data-platform/
 ├── 📄 docker-compose.yml        # Hạ tầng: Postgres + Airflow
 ├── 📄 Dockerfile                # Custom Airflow image
 ├── 📄 .env                      # ⚠️ Credentials (KHÔNG commit lên Git)
+├── 📄 hanoi_aq_weather_MERGED.csv  # Dữ liệu CSV lịch sử gốc (được copy vào src/ khi nạp)
+├── 📄 hanoi_realtime_data_updated.csv # Dữ liệu CSV realtime gốc
 │
 ├── 📁 src/                      # Extract & Load Layer  →  src/README.md
 ├── 📁 airflow/                  # Orchestration Layer   →  airflow/README.md
@@ -71,7 +73,13 @@ weather-meteo-data-platform/
 # 2. Khởi chạy toàn bộ hệ thống
 docker compose up -d --build
 
-# 3. Truy cập Airflow UI
+# 3. Nạp dữ liệu lịch sử từ file CSV vào Database (Backfill Hà Nội)
+docker exec -i airflow_container python3 /opt/airflow/src/scripts/load_historical_csvs.py
+
+# 4. Nạp dữ liệu lịch sử từ Open-Meteo API vào Database (Backfill TP.HCM)
+docker exec -i airflow_container python3 /opt/airflow/src/scripts/backfill_hcm_history.py
+
+# 5. Truy cập Airflow UI
 open http://localhost:8080
 # Username/Password: xem _AIRFLOW_WWW_USER_* trong .env
 ```

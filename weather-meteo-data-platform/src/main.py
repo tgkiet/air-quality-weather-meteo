@@ -13,19 +13,40 @@ from src.utils.logger import get_logger
 logger = get_logger("MainPipeline")
 
 
-def _load_api_config() -> dict:
+def _load_api_config() -> tuple:
     """
-    Đọc config.json và trả về phần cấu hình Open-Meteo.
+    Đọc config.json và trả về phần cấu hình Open-Meteo cùng danh sách locations.
     Tách ra hàm riêng để dễ test và rõ ràng hơn.
     """
     config_path = os.path.join(os.path.dirname(__file__), 'config', 'config.json')
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)["api"]["open_meteo"]
+            data = json.load(f)
+            return data["api"]["open_meteo"], data["locations"]
     except FileNotFoundError:
         raise FileNotFoundError(f"API config file not found at: {config_path}")
     except (KeyError, json.JSONDecodeError) as e:
         raise ValueError(f"Invalid config.json structure: {e}") from e
+
+
+def _inject_location_metadata(data, locations: list):
+    """
+    Injects canonical/requested coordinates and names into the raw API response elements.
+    This ensures weather and air quality datasets can be joined perfectly in the DB
+    without grid snapping mismatches.
+    """
+    if isinstance(data, list):
+        for idx, item in enumerate(data):
+            if idx < len(locations):
+                item["requested_latitude"] = locations[idx]["latitude"]
+                item["requested_longitude"] = locations[idx]["longitude"]
+                item["location_name"] = locations[idx]["name"]
+    elif isinstance(data, dict):
+        # Fallback for single location responses
+        data["requested_latitude"] = locations[0]["latitude"]
+        data["requested_longitude"] = locations[0]["longitude"]
+        data["location_name"] = locations[0]["name"]
+    return data
 
 
 def main():
@@ -47,11 +68,20 @@ def main():
     # 2. Nạp cấu hình API (URL, params) từ config.json
     #    ConfigManager chỉ quản lý runtime constants (timeout, retry).
     # ------------------------------------------------------------------
-    api_cfg        = _load_api_config()
+    api_cfg, locations = _load_api_config()
     weather_url    = api_cfg["weather_url"]
-    weather_params = api_cfg["weather_params"]
+    weather_params = api_cfg["weather_params"].copy()
     aq_url         = api_cfg["aq_url"]
-    aq_params      = api_cfg["aq_params"]
+    aq_params      = api_cfg["aq_params"].copy()
+
+    # Tạo chuỗi tọa độ ngăn cách bằng dấu phẩy cho Batch API call
+    lats = [str(loc["latitude"]) for loc in locations]
+    lons = [str(loc["longitude"]) for loc in locations]
+    
+    weather_params["latitude"] = ",".join(lats)
+    weather_params["longitude"] = ",".join(lons)
+    aq_params["latitude"] = ",".join(lats)
+    aq_params["longitude"] = ",".join(lons)
 
     # ------------------------------------------------------------------
     # 3. EXTRACT — Thực hiện cả 2 API call trước, xử lý lỗi ngay tại chỗ.
@@ -60,18 +90,20 @@ def main():
     # ------------------------------------------------------------------
     logger.info("1. Đang lấy dữ liệu Thời Tiết từ Open-Meteo API...")
     weather_extractor = OpenMeteoExtractor(weather_url)
-    weather_data = weather_extractor.get_open_meteo_data(
+    raw_weather = weather_extractor.get_open_meteo_data(
         weather_params,
         expected_keys={"latitude", "longitude", "hourly"}
     )
+    weather_data = _inject_location_metadata(raw_weather, locations)
     logger.info("-> Lấy dữ liệu Thời Tiết thành công!")
 
     logger.info("2. Đang lấy dữ liệu Chất lượng không khí từ Open-Meteo API...")
     aq_extractor = OpenMeteoExtractor(aq_url)
-    aq_data = aq_extractor.get_open_meteo_data(
+    raw_aq = aq_extractor.get_open_meteo_data(
         aq_params,
         expected_keys={"latitude", "longitude", "hourly"}
     )
+    aq_data = _inject_location_metadata(raw_aq, locations)
     logger.info("-> Lấy dữ liệu Chất Lượng Không Khí thành công!")
 
     # ------------------------------------------------------------------

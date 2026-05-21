@@ -41,24 +41,27 @@ class OpenMeteoExtractor:
             raw_data = response.json()
             
             # Tối ưu 6: Data Contract Validation (Kiểm duyệt dữ liệu đầu vào)
-            if not isinstance(raw_data, dict):
-                raise ValueError("API did not return a valid JSON Dictionary.")
+            if not isinstance(raw_data, (dict, list)):
+                raise ValueError("API did not return a valid JSON Dictionary or Array.")
             
-            # Defensive check cho cấu trúc lỗi trả về dạng 200 OK
-            if "error" in raw_data and raw_data.get("error") is True:
-                reason = raw_data.get("reason", "Unknown API error")
-                raise ValueError(f"API returned an error payload: {reason}")
-                
-            # ĐÂY MỚI LÀ DATA CONTRACT CHUẨN: 
-            # Đảm bảo hình hài (schema) của cục JSON phải đúng như cam kết Business Logic.
-            if expected_keys:
-                missing_keys = expected_keys - raw_data.keys()
-                if missing_keys:
-                    raise ValueError(f"Data Contract Violation: Response is missing essential keys: {missing_keys}. Payload: {raw_data}")
-                
-                # Nếu có key 'hourly' trong hợp đồng, ta kiểm tra sâu hơn một chút (Nested Validation)
-                if "hourly" in expected_keys and "time" not in raw_data.get("hourly", {}):
-                    raise ValueError("Data Contract Violation: 'hourly' object is missing the 'time' array.")
+            items_to_validate = raw_data if isinstance(raw_data, list) else [raw_data]
+            
+            for item in items_to_validate:
+                # Defensive check cho cấu trúc lỗi trả về dạng 200 OK
+                if "error" in item and item.get("error") is True:
+                    reason = item.get("reason", "Unknown API error")
+                    raise ValueError(f"API returned an error payload: {reason}")
+                    
+                # ĐÂY MỚI LÀ DATA CONTRACT CHUẨN: 
+                # Đảm bảo hình hài (schema) của cục JSON phải đúng như cam kết Business Logic.
+                if expected_keys:
+                    missing_keys = expected_keys - item.keys()
+                    if missing_keys:
+                        raise ValueError(f"Data Contract Violation: Response is missing essential keys: {missing_keys}. Payload: {item}")
+                    
+                    # Nếu có key 'hourly' trong hợp đồng, ta kiểm tra sâu hơn một chút (Nested Validation)
+                    if "hourly" in expected_keys and "time" not in item.get("hourly", {}):
+                        raise ValueError("Data Contract Violation: 'hourly' object is missing the 'time' array.")
             
             return raw_data
             

@@ -6,6 +6,9 @@
 WITH stg_weather AS (
     SELECT * 
     FROM {{ ref('stg_weather_hourly') }}
+    UNION ALL
+    SELECT *
+    FROM {{ ref('stg_historical_weather') }}
 )
 
 -- LỖI LOGIC ĐÃ ĐƯỢC FIX: 

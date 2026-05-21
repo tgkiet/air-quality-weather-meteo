@@ -28,3 +28,25 @@ sources:
 
           - name: raw_json
             description: "Cục JSONB thô"
+
+      - name: bronze_historical_weather
+        description: "Bảng chứa dữ liệu lịch sử thời tiết và chất lượng không khí Hanoi nạp từ CSV"
+        columns:
+          - name: id
+            description: "Khoá chính tự tăng"
+            tests:
+              - unique
+              - not_null
+          - name: datetime
+            description: "Thời gian đo đạc"
+            tests:
+              - not_null
+          - name: lat
+            description: "Vĩ độ"
+            tests:
+              - not_null
+          - name: lon
+            description: "Kinh độ"
+            tests:
+              - not_null
+
