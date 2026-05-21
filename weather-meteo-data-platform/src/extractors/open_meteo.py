@@ -40,7 +40,7 @@ class OpenMeteoExtractor:
             # Phân tách rõ quá trình lấy JSON ra khỏi quá trình lấy HTTP
             raw_data = response.json()
             
-            # Tối ưu 6: Data Contract Validation (Kiểm duyệt dữ liệu đầu vào)
+            # Tối ưu 4: Data Contract Validation (Kiểm duyệt dữ liệu đầu vào)
             if not isinstance(raw_data, (dict, list)):
                 raise ValueError("API did not return a valid JSON Dictionary or Array.")
             
@@ -65,12 +65,12 @@ class OpenMeteoExtractor:
             
             return raw_data
             
-        # Tối ưu 4 (cập nhật): Bắt lỗi mạng (Network/HTTP Errors)
+        # Tối ưu 4: Bắt lỗi mạng (Network/HTTP Errors)
         except requests.exceptions.RequestException as e:
             logger.error(f"HTTP Request failed for {self.url}: {e}")
             raise RuntimeError(f"Failed to fetch data from Open-Meteo API: {e}") from e
             
-        # Tối ưu 7: Bắt lỗi khi dữ liệu trả về không phải JSON hoặc vi phạm Data Contract
+        # Tối ưu 6: Bắt lỗi khi dữ liệu trả về không phải JSON hoặc vi phạm Data Contract
         except ValueError as ve:
             logger.error(f"Data Contract / JSON Decoding failed: {ve}")
             raise RuntimeError(f"Data Validation failed: {ve}") from ve

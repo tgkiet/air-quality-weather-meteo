@@ -23,9 +23,12 @@ SELECT DISTINCT ON (forecast_time, latitude, longitude)
 FROM stg_weather
 
 {% if is_incremental() %}
-    -- Lọc lấy dữ liệu từ mẻ chạy cũ nhất đến mẻ mới nhất.
-    -- Ép kiểu rõ ràng '1900-01-01'::timestamp để tránh lỗi Type Casting của Postgres
-    WHERE execution_date >= (SELECT COALESCE(max(execution_date), '1900-01-01'::timestamptz) FROM {{ this }})
+    -- LOGIC-2 FIX: Dùng `>` thay vì `>=` để tránh reprocess batch cuối mỗi lần chạy.
+    -- Với `>=`, mọi batch cuối cùng luôn bị UPSERT lại dù không có gì thay đổi
+    -- (53 locations × 168 giờ forecast = ~8,900 rows mỗi giờ — lãng phí).
+    -- Airflow retry vẫn được bảo toàn vì retry cùng execution_date
+    -- sẽ được ghi đè lên Bronze trước — Silver chỉ thấy 1 phiên bản.
+    WHERE execution_date > (SELECT COALESCE(max(execution_date), '1900-01-01'::timestamptz) FROM {{ this }})
 {% endif %}
 
 -- Bắt buộc phải ORDER BY theo bộ khóa, sau đó ưu tiên execution_date DESC

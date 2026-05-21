@@ -1,6 +1,6 @@
-# ✈️ Airflow — Orchestration Layer
+# ✈️ airflow/ — Orchestration Layer
 
-Thư mục `airflow/` chứa toàn bộ cấu hình cho **Apache Airflow** — bộ não điều phối (Orchestrator) tự động hóa việc chạy pipeline theo lịch.
+> **Apache Airflow 3.2.0** điều phối toàn bộ pipeline theo lịch `@hourly`, đảm bảo Idempotency qua `logical_date`, tự động retry và báo lỗi.
 
 ---
 
@@ -9,9 +9,8 @@ Thư mục `airflow/` chứa toàn bộ cấu hình cho **Apache Airflow** — b
 ```
 airflow/
 ├── dags/
-│   └── orchestrator.py      # DAG duy nhất định nghĩa lịch chạy pipeline
-└── logs/                    # Airflow tự động ghi log task vào đây
-    └── dag_processor/       # Log của DAG processor
+│   └── orchestrator.py      # DAG duy nhất — 3 tasks nối tiếp
+└── logs/                    # Airflow tự ghi log task
 ```
 
 ---
@@ -20,98 +19,118 @@ airflow/
 
 ### Cấu Hình
 
-| Thuộc Tính | Giá Trị | Mô Tả |
+| Thuộc Tính | Giá Trị | Lý Do |
 |---|---|---|
-| `dag_id` | `open_meteo_api_pipeline_orchestrator` | Tên định danh DAG |
-| `owner` | `gkinhere-airflow` | Người sở hữu |
-| `schedule` | `@hourly` | Chạy vào phút 0 mỗi giờ |
-| `catchup` | `False` | Không chạy bù các lần đã bỏ lỡ |
-| `retries` | `3` | Tự động retry 3 lần khi task lỗi |
-| `start_date` | `2026-05-01` | Ngày bắt đầu hiệu lực |
+| `schedule` | `@hourly` (`0 * * * *`) | Chạy đúng phút 0 mỗi giờ — chuẩn Time Series |
+| `catchup` | `False` | Không chạy bù các giờ bị bỏ lỡ |
+| `retries` | `3` | Tự retry khi API timeout hoặc DB tạm thời lỗi |
+| `retry_delay` | `5 phút` | Không retry ngay — cho API/DB thời gian recover |
+| `start_date` | `2026-05-01` | Ngày bắt đầu có hiệu lực |
 
-### Tasks
-
-```
-[fetch_data]
-     │ (Python Extract & Load)
-     ▼
-[dbt_run]
-     │ (Transform: Staging → Silver → Gold)
-     ▼
-[dbt_test]
-       (Data Quality Gate - 17 Tests)
-```
-
-Hiện tại DAG đã được hoàn thiện với **3 tasks chạy nối tiếp nhau** (Dependencies). 
-- `fetch_data`: Kéo dữ liệu từ API nạp vào bảng Bronze bằng Python.
-- `dbt_run`: Kích hoạt dbt CLI ngay bên trong Airflow container để chạy các lệnh Transform, biến đổi dữ liệu từ Bronze lên Silver và Gold.
-- `dbt_test`: Chạy 17 bài Data Tests để đảm bảo chất lượng. Nếu dữ liệu có lỗi NULL sai quy định, toàn bộ Pipeline sẽ bị đánh dấu là FAILED.
-
-
-### Tại Sao Dùng `@hourly` Thay Vì `timedelta(hours=1)`?
-
-- `timedelta(hours=1)`: Đếm khoảng cách 1 giờ **từ lúc bật hệ thống** → chạy vào giờ lẻ (10:13, 11:13...)
-- `@hourly` (tương đương `0 * * * *`): Chạy vào **đúng phút 0** mỗi giờ (10:00, 11:00, 12:00...)
-
-Chuẩn DE yêu cầu dữ liệu phải được chuẩn hóa theo khung giờ tròn để dễ join, aggregate và so sánh theo time series.
+> **Tại sao `@hourly` thay vì `timedelta(hours=1)`?**
+> `timedelta` đếm từ lúc Airflow start → chạy vào giờ lẻ (10:13, 11:13...). `@hourly` luôn chạy vào phút 0 (10:00, 11:00...) — chuẩn để join/aggregate time series.
 
 ---
 
-## Cách Quản Lý DAG Qua CLI
+### Task Flow
 
-```bash
-# Xem danh sách DAGs
-docker exec airflow_container airflow dags list
-
-# Trigger chạy thủ công
-docker exec airflow_container airflow dags trigger open_meteo_api_pipeline_orchestrator
-
-# Xem lịch sử chạy
-docker exec airflow_container airflow dags list-runs -d open_meteo_api_pipeline_orchestrator
-
-# Xem trạng thái tasks của một run cụ thể
-docker exec airflow_container airflow tasks states-for-dag-run \
-    open_meteo_api_pipeline_orchestrator <run_id>
-
-# Quản lý User
-docker exec airflow_container airflow users list
-docker exec airflow_container airflow users create --help
-docker exec airflow_container airflow users reset-password -u <username> -p <new_password>
 ```
+[fetch_data]  ──►  [dbt_run]  ──►  [dbt_test]
+  BashOperator     BashOperator     BashOperator
+  Extract+Load     Transform        Quality Gate
+```
+
+**Task 1 — `fetch_data`:**
+```bash
+python3 /opt/airflow/src/main.py --execution_date "{{ logical_date | ts }}"
+```
+- Gọi Open-Meteo Batch API (53 locations/call)
+- UPSERT vào Bronze: `api_openmeteo_raw_data`
+
+**Task 2 — `dbt_run`:**
+```bash
+dbt run --project-dir /opt/airflow/dbt-transform \
+        --profiles-dir /home/airflow/.dbt
+```
+- Staging VIEW → Silver INCREMENTAL → Gold TABLE
+- 7 models, ~2-3 giây
+
+**Task 3 — `dbt_test`:**
+```bash
+dbt test --project-dir /opt/airflow/dbt-transform \
+         --profiles-dir /home/airflow/.dbt
+```
+- 29 data quality tests
+- Pipeline FAIL nếu bất kỳ test nào fail → không publish dữ liệu xấu
+
+---
+
+## Idempotency via `logical_date`
+
+```python
+# Airflow Jinja template → execution_date cố định cho mỗi scheduled run
+bash_command='python3 /opt/airflow/src/main.py --execution_date "{{ logical_date | ts }}"'
+```
+
+- `logical_date` = thời điểm lên lịch, **KHÔNG** phải `datetime.now()`
+- Chạy lại cùng run → cùng `execution_date` → Bronze UPSERT → không tạo duplicate
+- Silver INCREMENTAL filter: `execution_date > max(...)` → chỉ process batch mới
 
 ---
 
 ## Cơ Chế Phát Hiện Lỗi Thực
 
-Trước đây, pipeline dùng `return` khi gặp lỗi:
-
 ```python
-# ❌ Sai — Airflow không biết có lỗi, vẫn đánh dấu SUCCESS giả tạo
+# ❌ Sai — Airflow đánh SUCCESS giả, không biết có lỗi
 except Exception as e:
     logger.error(e)
-    return  # exit code = 0 → Airflow thấy "thành công"
-```
+    return  # exit code = 0
 
-Sau khi được fix, tất cả exception đều dùng `raise`:
-
-```python
-# ✅ Đúng — Airflow nhận exit code ≠ 0, đánh dấu FAILED và trigger retry
+# ✅ Đúng — Airflow nhận FAILED, trigger retry
 except Exception as e:
     logger.error(e)
-    raise  # exit code ≠ 0 → Airflow biết task thất bại
+    raise   # exit code ≠ 0
 ```
 
 ---
 
-## Phiên Bản & Auth Manager
+## CLI Commands
 
-Hệ thống dùng **Airflow 3.2.0** với **FabAuthManager** (Flask AppBuilder Auth Manager).
+```bash
+# Xem DAGs đang chạy
+docker exec airflow_container airflow dags list
 
-Lý do không dùng `SimpleAuthManager` mặc định của Airflow 3:
-- `SimpleAuthManager` chỉ có 1 tài khoản `admin` với password ngẫu nhiên, không hỗ trợ custom credentials
-- `FabAuthManager` hỗ trợ đầy đủ RBAC, tạo nhiều user, reset password qua CLI, tích hợp OAuth
+# Trigger thủ công (test ngay)
+docker exec airflow_container airflow dags trigger \
+    open_meteo_api_pipeline_orchestrator
 
-Cấu hình trong `docker-compose.yml`:
+# Xem lịch sử runs
+docker exec airflow_container airflow dags list-runs \
+    -d open_meteo_api_pipeline_orchestrator
+
+# Xem trạng thái tasks của một run
+docker exec airflow_container airflow tasks states-for-dag-run \
+    open_meteo_api_pipeline_orchestrator <run_id>
+
+# Quản lý User
+docker exec airflow_container airflow users list
+docker exec airflow_container airflow users reset-password \
+    -u <username> -p <new_password>
+```
+
+---
+
+## Auth Manager
+
+Hệ thống dùng **FabAuthManager** (Flask AppBuilder) thay vì `SimpleAuthManager` mặc định của Airflow 3:
+
+| | SimpleAuthManager | FabAuthManager |
+|---|---|---|
+| User management | 1 user admin cố định | Nhiều users, RBAC |
+| Password | Random, không custom | Custom qua CLI |
+| OAuth | Không | Hỗ trợ |
+
 ```yaml
+# docker-compose.yml
 AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
 ```

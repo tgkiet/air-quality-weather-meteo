@@ -2,31 +2,58 @@ version: 2
 
 models:
   - name: slv_weather_hourly
-    description: "Bảng Silver chứa dữ liệu thời tiết đã được bóc tách và làm sạch, lưu trữ theo cơ chế Incremental."
+    description: >
+      Bảng Silver chứa dữ liệu thời tiết đã được bóc tách và làm sạch,
+      lưu trữ theo cơ chế Incremental (DISTINCT ON + dbt MERGE).
+      Gộp 2 nguồn: stg_weather_hourly (realtime 7 ngày) UNION ALL
+      stg_historical_weather (lịch sử CSV/backfill từ 2022).
+      unique_key = (forecast_time, latitude, longitude).
+      Số locations thực tế: 20 grid cells (từ 20 entries trong config.json,
+      đã được prune từ 53 xuống 20 để khớp với API grid resolution ~1km).
     columns:
       - name: forecast_time
-        description: "Mốc thời gian dự báo (đã quy chuẩn về chuẩn TIMESTAMPTZ)"
+        description: "Mốc thời gian dự báo (TIMESTAMPTZ — chuẩn UTC, đã shift từ Asia/Bangkok)"
         tests:
           - not_null
       - name: latitude
-        description: "Vĩ độ (Đã làm tròn 2 chữ số)"
+        description: "Vĩ độ (đã làm tròn 4 chữ số thập phân)"
         tests:
           - not_null
       - name: longitude
-        description: "Kinh độ (Đã làm tròn 2 chữ số)"
+        description: "Kinh độ (đã làm tròn 4 chữ số thập phân)"
         tests:
           - not_null
+      - name: location_name
+        description: >
+          Tên quận/huyện theo config.json. NULL với data lịch sử Hanoi CSV cũ.
+          Luôn có giá trị với realtime data và HCM backfill.
+        tests:
+          - not_null:
+              config:
+                severity: warn
 
   - name: slv_air_quality_hourly
-    description: "Bảng Silver chứa dữ liệu chất lượng không khí đã bóc tách."
+    description: >
+      Bảng Silver chứa dữ liệu chất lượng không khí đã bóc tách.
+      Gộp 2 nguồn: stg_air_quality_hourly (realtime ~5 ngày) UNION ALL
+      stg_historical_air_quality (lịch sử từ CSV từ 2022).
+      unique_key = (forecast_time, latitude, longitude).
     columns:
       - name: forecast_time
-        description: "Mốc thời gian dự báo"
+        description: "Mốc thời gian dự báo (TIMESTAMPTZ)"
         tests:
           - not_null
       - name: latitude
+        description: "Vĩ độ"
         tests:
           - not_null
       - name: longitude
+        description: "Kinh độ"
         tests:
           - not_null
+      - name: location_name
+        description: "Tên quận/huyện. NULL với Hanoi CSV lịch sử."
+        tests:
+          - not_null:
+              config:
+                severity: warn

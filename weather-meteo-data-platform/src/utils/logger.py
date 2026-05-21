@@ -31,9 +31,10 @@ def get_logger(name: str) -> logging.Logger:
         logger.addHandler(console_handler)
 
         # Handler 2: Ghi file — chỉ khi chạy local (không phải trong Docker)
-        # Phát hiện môi trường Docker bằng biến môi trường AIRFLOW_HOME
-        # hoặc biến RUNNING_IN_DOCKER (có thể set trong docker-compose.yml)
-        is_docker = os.getenv("AIRFLOW_HOME") or os.getenv("RUNNING_IN_DOCKER")
+        # QUALITY-6 FIX: Dùng biến rõ ràng RUNNING_IN_DOCKER="true" thay vì suy luận
+        # từ AIRFLOW_HOME (AIRFLOW_HOME cũng được set khi cài Airflow local, gây nhầm).
+        # Để kích hoạt: thêm `RUNNING_IN_DOCKER: "true"` vào environment trong docker-compose.yml.
+        is_docker = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
         if not is_docker:
             log_dir = os.path.abspath(
                 os.path.join(os.path.dirname(__file__), '..', '..', 'logs')

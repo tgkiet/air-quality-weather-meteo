@@ -1,5 +1,4 @@
 
-
 WITH raw_records AS (
     SELECT
         id AS raw_id,
@@ -21,20 +20,19 @@ source_data AS (
     SELECT 
         raw_id,
         execution_date,
-        CASE 
-            WHEN single_json->>'requested_latitude' IS NOT NULL 
-                THEN ROUND(CAST(single_json->>'requested_latitude' AS NUMERIC), 4)
-            WHEN ROUND(CAST(single_json->>'latitude' AS NUMERIC), 1) = 10.8 
-                THEN 10.78
-            ELSE ROUND(CAST(single_json->>'latitude' AS NUMERIC), 4)
-        END AS latitude,
-        CASE 
-            WHEN single_json->>'requested_longitude' IS NOT NULL 
-                THEN ROUND(CAST(single_json->>'requested_longitude' AS NUMERIC), 4)
-            WHEN ROUND(CAST(single_json->>'longitude' AS NUMERIC), 1) = 106.7 
-                THEN 106.70
-            ELSE ROUND(CAST(single_json->>'longitude' AS NUMERIC), 4)
-        END AS longitude,
+
+        -- LOGIC-1 FIX: Xóa magic number fallback (10.8→10.78, 106.7→106.70) vì chúng
+        -- là dead code sau khi _inject_location_metadata() đã inject requested_latitude
+        -- vào toàn bộ items. Nhánh WHEN IS NOT NULL luôn đúng → 2 WHEN còn lại
+        -- không bao giờ chạy tới. Giữ lại gây nhầm lẫn cho người đọc sau.
+        ROUND(CAST(single_json->>'requested_latitude'  AS NUMERIC), 4) AS latitude,
+        ROUND(CAST(single_json->>'requested_longitude' AS NUMERIC), 4) AS longitude,
+
+        -- BUG-5 FIX: Trích xuất location_name từ raw_json để surface lên Silver & Gold.
+        -- Trước đây location_name được inject vào JSONB nhưng không bao giờ được đọc ra.
+        -- Không có location_name → Dashboard chỉ thấy tọa độ số, không biết tên quận/trạm.
+        single_json->>'location_name' AS location_name,
+
         single_json AS raw_json
     FROM raw_records
 ),
@@ -45,6 +43,7 @@ extracted_arrays AS (
         execution_date,
         latitude,
         longitude,
+        location_name,
         
         -- LỖI TIMEZONE ĐÃ ĐƯỢC FIX: Open-Meteo trả về giờ địa phương (Asia/Bangkok).
         -- Nếu chỉ dùng TIMESTAMP, BI Tool sẽ hiểu nhầm là giờ UTC.
@@ -53,20 +52,20 @@ extracted_arrays AS (
         
         -- Dùng idx để "móc" dữ liệu ở các mảng khác tương ứng cùng vị trí
         -- Lưu ý: Index của PostgreSQL jsonb array bắt đầu từ 0, nên phải lấy idx - 1
-        CAST(raw_json->'hourly'->'temperature_2m'->>(t.idx::int - 1) AS NUMERIC) AS temperature_2m,
-        CAST(raw_json->'hourly'->'relative_humidity_2m'->>(t.idx::int - 1) AS NUMERIC) AS relative_humidity_2m,
-        CAST(raw_json->'hourly'->'dew_point_2m'->>(t.idx::int - 1) AS NUMERIC) AS dew_point_2m,
-        CAST(raw_json->'hourly'->'apparent_temperature'->>(t.idx::int - 1) AS NUMERIC) AS apparent_temperature,
+        CAST(raw_json->'hourly'->'temperature_2m'->>(t.idx::int - 1) AS NUMERIC)           AS temperature_2m,
+        CAST(raw_json->'hourly'->'relative_humidity_2m'->>(t.idx::int - 1) AS NUMERIC)     AS relative_humidity_2m,
+        CAST(raw_json->'hourly'->'dew_point_2m'->>(t.idx::int - 1) AS NUMERIC)             AS dew_point_2m,
+        CAST(raw_json->'hourly'->'apparent_temperature'->>(t.idx::int - 1) AS NUMERIC)     AS apparent_temperature,
         CAST(raw_json->'hourly'->'precipitation_probability'->>(t.idx::int - 1) AS NUMERIC) AS precipitation_probability,
-        CAST(raw_json->'hourly'->'precipitation'->>(t.idx::int - 1) AS NUMERIC) AS precipitation,
-        CAST(raw_json->'hourly'->'pressure_msl'->>(t.idx::int - 1) AS NUMERIC) AS pressure_msl,
-        CAST(raw_json->'hourly'->'surface_pressure'->>(t.idx::int - 1) AS NUMERIC) AS surface_pressure,
-        CAST(raw_json->'hourly'->'cloud_cover'->>(t.idx::int - 1) AS NUMERIC) AS cloud_cover,
-        CAST(raw_json->'hourly'->'visibility'->>(t.idx::int - 1) AS NUMERIC) AS visibility,
-        CAST(raw_json->'hourly'->'wind_speed_10m'->>(t.idx::int - 1) AS NUMERIC) AS wind_speed_10m,
-        CAST(raw_json->'hourly'->'wind_direction_10m'->>(t.idx::int - 1) AS NUMERIC) AS wind_direction_10m,
-        CAST(raw_json->'hourly'->'wind_gusts_10m'->>(t.idx::int - 1) AS NUMERIC) AS wind_gusts_10m,
-        CAST(raw_json->'hourly'->'uv_index'->>(t.idx::int - 1) AS NUMERIC) AS uv_index
+        CAST(raw_json->'hourly'->'precipitation'->>(t.idx::int - 1) AS NUMERIC)            AS precipitation,
+        CAST(raw_json->'hourly'->'pressure_msl'->>(t.idx::int - 1) AS NUMERIC)             AS pressure_msl,
+        CAST(raw_json->'hourly'->'surface_pressure'->>(t.idx::int - 1) AS NUMERIC)         AS surface_pressure,
+        CAST(raw_json->'hourly'->'cloud_cover'->>(t.idx::int - 1) AS NUMERIC)              AS cloud_cover,
+        CAST(raw_json->'hourly'->'visibility'->>(t.idx::int - 1) AS NUMERIC)               AS visibility,
+        CAST(raw_json->'hourly'->'wind_speed_10m'->>(t.idx::int - 1) AS NUMERIC)           AS wind_speed_10m,
+        CAST(raw_json->'hourly'->'wind_direction_10m'->>(t.idx::int - 1) AS NUMERIC)       AS wind_direction_10m,
+        CAST(raw_json->'hourly'->'wind_gusts_10m'->>(t.idx::int - 1) AS NUMERIC)           AS wind_gusts_10m,
+        CAST(raw_json->'hourly'->'uv_index'->>(t.idx::int - 1) AS NUMERIC)                 AS uv_index
         
     FROM source_data,
     LATERAL jsonb_array_elements_text(raw_json->'hourly'->'time') WITH ORDINALITY AS t(time_str, idx)

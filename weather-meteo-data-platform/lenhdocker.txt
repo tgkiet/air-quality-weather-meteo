@@ -1,0 +1,35 @@
+Bước 1: Khởi động hệ thống
+Lệnh này sẽ tải các image cần thiết và dựng lên 2 máy ảo: một cho Database (PostgreSQL) và một cho Airflow.
+    docker compose up -d --build
+
+Bước 2: Nạp dữ liệu lịch sử CSV (Hà Nội 2022 - 2025)
+File CSV của bạn đã được gắn (mount) tự động vào bên trong airflow_container. Bây giờ ta bảo container chạy script Python để nạp file này vào Database.
+    docker exec airflow_container python3 /opt/airflow/src/scripts/load_historical_csvs.py
+
+Bước 3: Kéo dữ liệu lịch sử từ API (Backfill)
+Tiếp tục bảo container chạy script kéo API cho TP.HCM (từ 2022 đến nay) và Hà Nội (khoảng trống từ tháng 11/2025 đến nay).
+
+3.1 Kéo lịch sử cho 10 trạm TP.HCM (Mất khoảng 10-15 phút):
+    docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-19
+
+3.2 Kéo bù khoảng trống cho 10 trạm Hà Nội (Mất khoảng 2-3 phút):
+    docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HN --start-date 2025-11-30 --end-date 2026-05-19
+
+
+Bước 4: Chạy dbt để nhào nặn dữ liệu (Transform)
+Lúc này, dữ liệu thô đang nằm lộn xộn ở tầng Bronze. Ta sẽ dùng dbt (được cài sẵn trong container) để làm sạch, gộp chúng lại và đẩy lên tầng Gold (bảng phẳng, đẹp, sẵn sàng vẽ biểu đồ).
+
+Chạy lệnh dbt run (nhào nặn):
+    docker exec airflow_container dbt run --full-refresh --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt
+Cờ --full-refresh yêu cầu dbt đập đi xây lại toàn bộ bảng dựa trên dữ liệu lịch sử bạn vừa nạp.
+
+Chạy lệnh dbt test (kiểm tra chất lượng):
+    docker exec airflow_container dbt test --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt
+
+Kết quả mong đợi: Dòng cuối cùng hiện PASS=29 WARN=0 ERROR=0 là thành công
+
+Bước 5: Tận hưởng thành quả
+Bây giờ dữ liệu lịch sử đã nằm gọn gàng trong bảng mart_hourly_conditions (tầng Gold). Đồng thời, hệ thống Airflow cũng đã tự động thức dậy và bắt đầu chu kỳ kéo dữ liệu thời tiết mới (Realtime) mỗi giờ 1 lần.
+
+mở trình duyệt web lên và truy cập:
+http://localhost:8080

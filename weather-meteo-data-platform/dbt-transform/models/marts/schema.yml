@@ -7,23 +7,47 @@ models:
       không khí thành 1 bảng phẳng sẵn sàng cho BI Tools (Superset/Tableau).
       Bao gồm các cột phân loại và cờ cảnh báo sức khỏe được tính toán sẵn.
       Schema: gold_layer (tách biệt khỏi silver_layer để phân quyền RBAC).
+      Nguồn: slv_weather_hourly (LEFT, 7 ngày) LEFT JOIN slv_air_quality_hourly (5 ngày).
 
     columns:
       # ── DIMENSIONS ────────────────────────────────────────────────────────
       - name: forecast_time
-        description: "Mốc thời gian dự báo (TIMESTAMPTZ - chuẩn UTC)"
+        description: "Mốc thời gian dự báo (TIMESTAMPTZ — chuẩn UTC)"
         tests:
           - not_null
 
       - name: latitude
-        description: "Vĩ độ (đã làm tròn 2 chữ số thập phân)"
+        description: "Vĩ độ (đã làm tròn 4 chữ số thập phân)"
         tests:
           - not_null
 
       - name: longitude
-        description: "Kinh độ (đã làm tròn 2 chữ số thập phân)"
+        description: "Kinh độ (đã làm tròn 4 chữ số thập phân)"
         tests:
           - not_null
+
+      - name: location_name
+        description: >
+          Tên địa điểm theo chuẩn config.json.
+          Hà Nội: "HN [Quận/Huyện]" (31 trạm).
+          TP.HCM: "HCM [Quận/Huyện]" (22 quận/huyện).
+          NULL chỉ xảy ra với dữ liệu lịch sử Hà Nội nạp từ CSV cũ
+          trước khi có cột location_name.
+        tests:
+          - not_null:
+              config:
+                severity: warn
+                # Warn (không fail) vì data lịch sử Hanoi CSV có thể NULL.
+                # Realtime data luôn có location_name.
+
+      # ── WEATHER METRICS ───────────────────────────────────────────────────
+      - name: temperature_2m
+        description: "Nhiệt độ 2m (°C)"
+        tests:
+          - not_null
+
+      - name: wind_speed_10m
+        description: "Tốc độ gió 10m (km/h)"
 
       # ── DERIVED: LABELS ───────────────────────────────────────────────────
       - name: temperature_level
@@ -32,6 +56,8 @@ models:
           Trả về 'Chưa có dữ liệu' nếu temperature_2m là NULL.
         tests:
           - not_null
+          - accepted_values:
+              values: ['Chưa có dữ liệu', 'Mát mẻ', 'Dễ chịu', 'Nóng', 'Rất nóng', 'Nguy hiểm']
 
       - name: uv_level
         description: >
@@ -40,28 +66,34 @@ models:
           Trả về 'Chưa có dữ liệu' nếu uv_index là NULL.
         tests:
           - not_null
+          - accepted_values:
+              values: ['Chưa có dữ liệu', 'Thấp', 'Trung bình', 'Cao', 'Rất cao', 'Cực kỳ nguy hiểm']
 
       - name: pm2_5_level
         description: >
-          Phân loại nồng độ PM2.5 theo chuẩn AQI:
-          Tốt / Trung bình / Không lành mạnh / Rất không lành mạnh / Nguy hiểm.
-          Trả về 'Chưa có dữ liệu' nếu ngoài tầm dự báo (~ngày 6-7).
+          Phân loại nồng độ PM2.5 theo chuẩn AQI Mỹ (µg/m³):
+          Tốt (<12) / Trung bình (12-35) / Không lành mạnh (35-55) /
+          Rất không lành mạnh (55-150) / Nguy hiểm (≥150).
+          Trả về 'Chưa có dữ liệu' nếu ngoài tầm dự báo CAMS (~ngày 6-7).
         tests:
           - not_null
+          - accepted_values:
+              values: ['Chưa có dữ liệu', 'Tốt', 'Trung bình', 'Không lành mạnh', 'Rất không lành mạnh', 'Nguy hiểm']
 
       # ── DERIVED: ALERT FLAGS ──────────────────────────────────────────────
       - name: is_weather_alert
         description: >
           Cờ cảnh báo thời tiết (TRUE/FALSE — KHÔNG BAO GIỜ NULL).
-          TRUE nếu: UV Index >= 8 HOẶC Nhiệt độ >= 38°C.
-          Chỉ dựa vào dữ liệu thời tiết (luôn đủ 7 ngày) để đảm bảo không NULL.
+          TRUE nếu: Nhiệt độ >= 38°C HOẶC UV Index >= 8 (Very High theo WHO).
+          UV NULL được treat là không trigger alert (UV guard tường minh).
+          temperature_2m luôn có dữ liệu 7 ngày → is_weather_alert không bao giờ NULL.
         tests:
           - not_null
 
       - name: is_air_quality_alert
         description: >
           Cờ cảnh báo chất lượng không khí (TRUE/FALSE/NULL).
-          TRUE  = PM2.5 >= 55 µg/m³ (Ô nhiễm nặng).
+          TRUE  = PM2.5 >= 55 µg/m³ (Ô nhiễm nặng — AQI "Rất không lành mạnh").
           FALSE = PM2.5 < 55 µg/m³ (Trong ngưỡng an toàn).
-          NULL  = Chưa có dữ liệu dự báo (ngày 6-7).
+          NULL  = Chưa có dữ liệu dự báo (ngày 6-7, ngoài tầm CAMS).
           Lưu ý: NULL ≠ FALSE. Dashboard nên hiển thị 'N/A' thay vì tích xanh.

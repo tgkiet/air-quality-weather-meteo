@@ -52,3 +52,61 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     UNIQUE (source_type, execution_date);
 
 EOSQL
+
+# BUG-6 FIX: Tạo bảng bronze_historical_weather (cho CSV + HCM backfill)
+# trong một psql session riêng để tránh transaction nesting issue.
+# Cột location_name được thêm vào để phân biệt tên địa điểm (HCM Quận 1, Hanoi Station...).
+# DO $$ LANGUAGE plpgsql để xử lý migration-safe (không lỗi nếu cột đã tồn tại).
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+
+    CREATE TABLE IF NOT EXISTS bronze_historical_weather (
+        id                      SERIAL PRIMARY KEY,
+        datetime                TIMESTAMPTZ NOT NULL,
+        temperature_2m          NUMERIC,
+        relative_humidity_2m    NUMERIC,
+        precipitation           NUMERIC,
+        rain                    NUMERIC,
+        wind_speed_10m          NUMERIC,
+        wind_direction_10m      NUMERIC,
+        pressure_msl            NUMERIC,
+        boundary_layer_height   NUMERIC,
+        pm10_cams               NUMERIC,
+        pm2_5_cams              NUMERIC,
+        carbon_monoxide_cams    NUMERIC,
+        nitrogen_dioxide_cams   NUMERIC,
+        sulphur_dioxide_cams    NUMERIC,
+        ozone_cams              NUMERIC,
+        location_id             NUMERIC,
+        lat                     NUMERIC,
+        lon                     NUMERIC,
+        location_name           VARCHAR(255),   -- Tên địa điểm: "HCM Quận 1", "HN Đống Đa", ...
+        ingested_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- -------------------------------------------------------------------------
+    -- "MỎ NEO" CHO TÍNH LŨY ĐẲNG CỦA BRONZE HISTORICAL:
+    -- BUG-NEW-1 FIX: Thêm UNIQUE constraint vào init_dbs.sh thay vì chỉ trong
+    -- csv_loader.py. Không có constraint này, backfill_history.py sẽ FAIL
+    -- với "there is no unique or exclusion constraint matching the ON CONFLICT
+    -- specification" nếu backfill chạy TRƯỚC csv_loader.
+    -- Constraint này cũng đảm bảo csv_loader UPSERT hoạt động đúng.
+    -- -------------------------------------------------------------------------
+    ALTER TABLE bronze_historical_weather
+    ADD CONSTRAINT unique_historical_datetime_lat_lon
+    UNIQUE (datetime, lat, lon);
+
+    -- Migration-safe: Thêm cột location_name nếu chưa tồn tại
+    -- Dùng \$BODY\$ thay vì \$\$ vì \$\$ bị bash expand thành PID trong heredoc
+    DO \$BODY\$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'bronze_historical_weather'
+              AND column_name  = 'location_name'
+        ) THEN
+            ALTER TABLE bronze_historical_weather ADD COLUMN location_name VARCHAR(255);
+        END IF;
+    END \$BODY\$;
+
+EOSQL

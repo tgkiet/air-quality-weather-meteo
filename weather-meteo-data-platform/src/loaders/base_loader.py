@@ -27,6 +27,13 @@ class BasePostgresLoader:
         self.db_port = os.getenv("POSTGRES_PORT")
         
     def connect(self):
+        """
+        Mở kết nối đến PostgreSQL với cơ chế retry.
+
+        Pattern: Stateful connection — lưu vào self.connection để các method khác
+        (insert_data, create_table...) dùng chung. Return value cũng được trả về
+        nhưng thường không cần bắt — caller dùng self.connection trực tiếp.
+        """
         if self.connection and not self.connection.closed:
             logger.info("Connection is already open.")
             return self.connection

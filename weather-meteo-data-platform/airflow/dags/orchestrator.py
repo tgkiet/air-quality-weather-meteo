@@ -1,6 +1,6 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ==============================================================================
 # DEFAULT ARGS — Cấu hình mặc định áp dụng cho toàn bộ các Task trong DAG này.
@@ -8,10 +8,12 @@ from datetime import datetime
 # ==============================================================================
 default_args = {
     'owner': 'gkinhere-airflow',
-    'description': 'Orchestrator DAG for OpenMeteo API data pipeline',
+    'description': 'Orchestrator DAG for OpenMeteo Weather & Air Quality ELT pipeline (53 locations)',
     # Airflow tự động retry 3 lần nếu task FAILED, trước khi báo lỗi thật sự.
     # Quan trọng: Retry vẫn dùng cùng execution_date → Đảm bảo Idempotency.
     'retries': 3,
+    # Không retry ngay lập tức — chờ 5 phút để API/DB có thể recover.
+    'retry_delay': timedelta(minutes=5),
     'start_date': datetime(2026, 5, 1),
 }
 
@@ -73,10 +75,10 @@ with DAG(
     # Chạy SAU dbt_run. Nếu test FAILED, Airflow đánh dấu task này là FAILED.
     # Các lần chạy tiếp theo sẽ biết là có vấn đề ở data quality.
     #
-    # Hiện tại có 17 bài test phủ sóng 3 tầng:
-    #   - Bronze : 4 tests (unique + not_null)
-    #   - Silver : 6 tests (not_null cho 3 khóa chính × 2 bảng)
-    #   - Gold   : 7 tests (not_null cho dimensions + labels + is_weather_alert)
+    # 29 data quality tests phủ sóng 3 tầng:
+    #   - Bronze : 7 tests (unique + not_null cho cả 2 bảng Bronze)
+    #   - Silver : 8 tests (not_null + location_name warn cho 2 bảng Silver)
+    #   - Gold   : 14 tests (not_null dimensions + accepted_values labels + alerts)
     dbt_test = BashOperator(
         task_id='dbt_test',
         bash_command=(

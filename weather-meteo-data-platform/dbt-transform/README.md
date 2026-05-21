@@ -1,92 +1,172 @@
-# dbt Transform — Lớp Biến Đổi Dữ Liệu (Silver & Gold Layers)
+# 🔄 dbt-transform/ — Transform Layer (Silver & Gold)
 
-Thư mục này chứa toàn bộ logic biến đổi dữ liệu (Transform) trong kiến trúc ELT. Nhiệm vụ chính là "nhào nặn" cục JSON thô từ tầng Bronze thành các bảng dữ liệu có cấu trúc (Tabular) chuẩn chỉnh phục vụ phân tích.
-
----
-
-## Kiến Trúc & Cấu Hình (OOP Mindset)
-
-Hệ thống dbt được thiết kế dựa trên nguyên tắc **Tách biệt cấu hình và mã nguồn** (Separation of Concerns):
-
-1. **`requirements_airflow.txt`**: Cài đặt trực tiếp `dbt-postgres` vào bên trong Airflow (không dùng Docker Socket, không cần dbt_container dư thừa).
-2. **`../.dbt/profiles.yml`**: Nơi lưu cấu hình kết nối Database. Tuyệt đối không hardcode mật khẩu, mọi kết nối được truyền qua biến môi trường (`{{ env_var('POSTGRES_USER') }}`) nạp từ file `.env`.
-3. **`dbt_project.yml`**: Trung tâm điều khiển dự án. Áp dụng cấu hình Materialization theo hướng đối tượng (Folder-based):
-   - Mọi model trong `staging/` tự động biến thành `VIEW` ảo (Tiết kiệm dung lượng).
-   - Mọi model trong `silver/` tự động biến thành `TABLE` vật lý với cơ chế `incremental` để tối ưu hiệu suất đọc ghi.
-   - Mọi model trong `marts/` tự động biến thành `TABLE` vật lý và được xếp vào schema riêng biệt `gold_layer`.
-4. **Macro Override (`generate_schema_name.sql`)**: Ghi đè hành vi sinh tên schema mặc định của dbt (tránh schema xấu kiểu `silver_layer_gold_layer`), đảm bảo Tầng Gold nằm đúng ở schema `gold_layer` chuẩn chỉnh.
+> Toàn bộ logic **Transform** trong chuỗi ELT. Biến đổi JSON thô từ Bronze thành bảng phẳng, sạch, sẵn sàng cho BI. Sử dụng **dbt 1.9.0** với `dbt-postgres` tích hợp trực tiếp vào Airflow container.
 
 ---
 
-## Cấu Trúc Lớp Dữ Liệu (Medallion Architecture)
+## Cấu Trúc
 
-### 1. Tầng Khai Báo Nguồn (Sources)
-- **Vị trí:** `models/staging/sources.yml`
-- **Mục đích:** Loại bỏ việc hardcode tên schema/bảng trong câu lệnh SQL (`SELECT * FROM public.api_...`).
-- Cung cấp tính năng test đầu vào tự động (`unique`, `not_null`) và dựng phả hệ dữ liệu (Data Lineage) chuẩn xác.
-
-### 2. Tầng Tiền Xử Lý (Staging Layer)
-- **Vị trí:** `models/staging/`
-- **Nhiệm vụ:** Lấy dữ liệu từ nguồn và bóc tách (Flatten) các mảng JSON song song phức tạp của API Open-Meteo bằng tuyệt kỹ PostgreSQL: `LATERAL jsonb_array_elements_text(...) WITH ORDINALITY`.
-- **Tư Duy Tối Ưu (Enterprise Mindset):**
-  - **Micro-Optimization:** Đưa các hàm `ROUND()` để làm tròn tọa độ lên CTE trên cùng để chỉ chạy 1 lần/dòng.
-  - **Timezone Shift Prevention:** Ép chuẩn `AT TIME ZONE 'Asia/Bangkok'` về `TIMESTAMPTZ` để Postgres chuyển đổi chuẩn xác múi giờ địa phương về giờ UTC gốc.
-  - **Float Jitter Prevention:** Làm tròn tọa độ 2 chữ số thập phân để chống nứt gãy Khóa Chính ở tầng Silver.
-
-### 3. Tầng Tinh Chế (Silver Layer)
-- **Vị trí:** `models/silver/`
-- **Nhiệm vụ:** Ghi dữ liệu vật lý với cơ chế **Incremental** (Tính Lũy đẳng). Chỉ đọc và ghi những bản ghi "mới xuất hiện", chống quá tải database.
-- **Tư Duy Tối Ưu (Enterprise Mindset):**
-  - **Data Duplication Prevention:** Dùng tuyệt kỹ `DISTINCT ON (forecast_time, ...)` kết hợp `ORDER BY execution_date DESC` để lọc bỏ các bản dự báo bị đè lên nhau giữa các lần gọi API. Tránh sập lệnh `MERGE` của dbt.
-  - **Idempotency:** Sử dụng `execution_date >= max(...)` để luôn bao quát các mẻ chạy Retry hoặc Backfill của Airflow mà không sinh ra rác dữ liệu.
-
-### 4. Tầng Thương Mại (Gold Layer / Data Marts)
-- **Vị trí:** `models/marts/`
-- **Nhiệm vụ:** Giải chuẩn hóa (Denormalize) dữ liệu, gộp bảng Thời tiết và Không khí thành một Bảng Phẳng (Flat Table) duy nhất, tính toán sẵn các chỉ số (Derived Metrics) để Data Analyst và Superset chỉ việc kéo-thả (Kéo 1 phát ăn ngay).
-- **Tư Duy Tối Ưu (Enterprise Mindset):**
-  - **Join Strategy (LEFT JOIN):** Chọn Bảng Thời Tiết (dự báo 7 ngày) làm Bảng Trụ Cột (Base), ghép thêm dữ liệu Không Khí (dự báo 5 ngày) vào. Bảo toàn tối đa giá trị cốt lõi của thời tiết mà không làm mất dữ liệu của ngày 6 và ngày 7.
-  - **Graceful Degradation (NULL Handling):** Khi Không Khí bị NULL ở ngày 6-7, các cột tính toán (như Cờ Cảnh Báo Không Khí) được thiết kế theo nguyên lý **NULL-safe**, trả về chuỗi "Chưa có dữ liệu" hoặc `NULL` thay vì kết luận sai lệch là `FALSE` (An toàn).
-  - **RBAC (Role-Based Access Control):** Tách bạch Tầng Gold ra schema `gold_layer` riêng biệt, giúp dễ dàng phân quyền cho Data Analyst (chỉ được phép đọc `gold_layer`, không thấy `silver_layer`).
+```
+dbt-transform/
+├── dbt_project.yml                  # Config project + materialization theo folder
+├── profiles.yml  (mount read-only)  # DB connection (env_var, không hardcode)
+│
+├── macros/
+│   └── generate_schema_name.sql     # Override schema naming (gold_layer)
+│
+└── models/
+    ├── staging/
+    │   ├── sources.yml              # Khai báo Bronze sources + tests
+    │   ├── stg_weather_hourly.sql   # Realtime weather: flatten JSONB → rows
+    │   ├── stg_air_quality_hourly.sql
+    │   ├── stg_historical_weather.sql  # Historical Hanoi/HCM data
+    │   └── stg_historical_air_quality.sql
+    │
+    ├── silver/
+    │   ├── schema.yml               # Tests + descriptions
+    │   ├── slv_weather_hourly.sql   # INCREMENTAL + DISTINCT ON + UNION ALL
+    │   └── slv_air_quality_hourly.sql
+    │
+    └── marts/
+        ├── schema.yml               # Tests + accepted_values
+        └── mart_hourly_conditions.sql  # Gold: LEFT JOIN + derived metrics
+```
 
 ---
 
-## Hệ Thống Kiểm Duyệt Chất Lượng (Data Quality Gates)
+## Materialization Strategy
 
-Pipeline hiện tại sở hữu **17 bài Data Tests** tự động, tạo thành lưới bảo vệ nhiều lớp:
-- **Bronze (4 tests):** Đảm bảo ID dữ liệu thô không trùng lặp, Không có dòng nào thiếu Execution Date.
-- **Silver (6 tests):** Khóa chính (Tọa độ + Thời gian) tuyệt đối không được phép NULL.
-- **Gold (7 tests):** Không chỉ test khóa chính, mà còn test các cột Derived Labels (như Cờ cảnh báo thời tiết) phải luôn có giá trị để đảm bảo Dashboard hoạt động chính xác.
+| Folder | Materialization | Lý Do |
+|---|---|---|
+| `staging/` | `view` | Không lưu vật lý, chỉ là SQL alias. Không tốn storage. |
+| `silver/` | `incremental` | Chỉ process batch mới → nhanh hơn full refresh ×10+ |
+| `marts/` | `table` (schema: `gold_layer`) | Flat table cho BI — read-heavy, write-once-per-run |
 
 ---
 
-## Hướng Dẫn Thực Hành / Chạy Thủ Công
+## 1. Staging Layer (VIEWs)
 
-Dbt hiện tại đã được **tích hợp sâu vào trong Airflow Container** để đảm bảo 100% sự đồng nhất giữa môi trường Dev và Prod (Tránh lỗi *Environment Drift*). Do đó, không có `dbt_container` riêng lẻ nào cả.
+**Nhiệm vụ:** Flatten JSONB array của Open-Meteo thành bảng tabular.
 
-Để thực hành hoặc debug thủ công, bạn cần chui vào máy Airflow:
+**Kỹ thuật chính:**
+```sql
+-- LATERAL unnest cùng lúc nhiều mảng JSON song song
+LATERAL jsonb_array_elements_text(raw_json->'hourly'->'time') WITH ORDINALITY AS t(val, idx)
+LATERAL jsonb_array_elements_text(raw_json->'hourly'->'temperature_2m') WITH ORDINALITY AS temp(val, idx)
+ON t.idx = temp.idx  -- sync theo ordinality index
+```
 
-**1. Truy cập vào Airflow Container:**
+**CRIT-2 FIX:** Mọi staging model phải **explicit list** đúng thứ tự cột để UNION ALL trong Silver không bị positional mismatch. Không được dùng `SELECT *` trong UNION ALL.
+
+---
+
+## 2. Silver Layer (INCREMENTAL)
+
+```sql
+-- DISTINCT ON lấy bản forecast mới nhất cho mỗi giờ/location
+SELECT DISTINCT ON (forecast_time, latitude, longitude)
+    *
+FROM (
+    SELECT * FROM {{ ref('stg_weather_hourly') }}
+    UNION ALL
+    SELECT * FROM {{ ref('stg_historical_weather') }}
+)
+{% if is_incremental() %}
+WHERE execution_date > (
+    SELECT COALESCE(MAX(execution_date), '1900-01-01'::timestamptz)
+    FROM {{ this }}
+)
+{% endif %}
+ORDER BY forecast_time, latitude, longitude, execution_date DESC
+```
+
+**Logic giải thích:**
+- `execution_date DESC` → DISTINCT ON giữ bản dự báo **mới nhất** cho mỗi (giờ, vị trí)
+- `> max(execution_date)` thay vì `>=` → không reprocess batch cuối mỗi giờ
+- dbt `unique_key = ['forecast_time', 'latitude', 'longitude', 'location_name']` → MERGE đúng
+
+---
+
+## 3. Gold Layer — `mart_hourly_conditions`
+
+**Flat table** gộp Weather + AQ với derived metrics:
+
+```sql
+-- Weather (7 ngày) LEFT JOIN Air Quality (5 ngày)
+-- → Giữ tối đa dữ liệu, AQ NULL ở ngày 6-7 là expected
+FROM weather w
+LEFT JOIN air_quality aq
+    ON  w.forecast_time = aq.forecast_time
+    AND w.latitude      = aq.latitude
+    AND w.longitude     = aq.longitude
+```
+
+**Derived Metrics:**
+
+| Cột | Logic |
+|---|---|
+| `temperature_level` | CASE: Mát mẻ(<20) / Dễ chịu(20-28) / Nóng(28-35) / Rất nóng(35-38) / Nguy hiểm(≥38) |
+| `uv_level` | CASE: Thấp(<3) / Trung bình(3-6) / Cao(6-8) / Rất cao(8-11) / Cực kỳ nguy hiểm(≥11) |
+| `pm2_5_level` | AQI Mỹ: Tốt(<12) / Trung bình(12-35) / Không lành mạnh(35-55) / Rất không lành mạnh(55-150) / Nguy hiểm |
+| `is_weather_alert` | TRUE nếu temp≥38°C HOẶC (UV IS NOT NULL AND UV≥8). **KHÔNG BAO GIỜ NULL.** |
+| `is_air_quality_alert` | TRUE nếu PM2.5≥55. NULL khi ngoài tầm CAMS forecast (~ngày 6-7). |
+
+---
+
+## Data Quality Gates — 29 Tests
+
+| Layer | Số Tests | Coverage |
+|---|---|---|
+| Bronze Sources | 7 | `not_null` id/source_type/execution_date/datetime/lat/lon; `unique` id |
+| Silver | 8 | `not_null` forecast_time/lat/lon/location_name (×2 models); warn cho location_name |
+| Gold | 14 | `not_null` key dims + is_weather_alert + temperature_2m; `accepted_values` cho 3 level columns |
+
 ```bash
+# Chạy toàn bộ tests
+docker exec airflow_container bash -c \
+    "dbt test --project-dir /opt/airflow/dbt-transform \
+               --profiles-dir /home/airflow/.dbt"
+
+# Kết quả mong đợi
+# Done. PASS=29 WARN=0 ERROR=0 SKIP=0 TOTAL=29
+```
+
+---
+
+## Chạy Thủ Công
+
+```bash
+# Vào container
 docker exec -it airflow_container bash
-```
 
-**2. Chạy biến đổi dữ liệu (Transform):**
-Lệnh này sẽ compile các file `.sql` và chạy chúng trong PostgreSQL.
-```bash
-dbt run --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt
-```
-*(Mẹo: Thêm cờ `--full-refresh` nếu bạn thay đổi cấu trúc bảng).*
+# Build tất cả models
+dbt run --project-dir /opt/airflow/dbt-transform \
+        --profiles-dir /home/airflow/.dbt
 
-**3. Chạy kiểm duyệt dữ liệu (Data Tests):**
-```bash
-dbt test --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt
+# Full refresh (khi thay đổi schema)
+dbt run --full-refresh \
+        --project-dir /opt/airflow/dbt-transform \
+        --profiles-dir /home/airflow/.dbt
+
+# Chỉ build Gold
+dbt run --select mart_hourly_conditions \
+        --project-dir /opt/airflow/dbt-transform \
+        --profiles-dir /home/airflow/.dbt
+
+# Test một model cụ thể
+dbt test --select slv_weather_hourly \
+         --project-dir /opt/airflow/dbt-transform \
+         --profiles-dir /home/airflow/.dbt
 ```
 
 ---
 
-## Luồng Chạy Tự Động (Airflow Orchestration)
+## Các Quyết Định Kỹ Thuật Quan Trọng
 
-Khi Airflow DAG `open_meteo_api_pipeline_orchestrator` kích hoạt, nó sẽ tự động gọi chuỗi lệnh sau:
-1. `fetch_data`: Python Extract & Load (Kéo JSON đẩy vào Bronze).
-2. `dbt_run`: Kích hoạt Staging -> Silver -> Gold (Transform & Load).
-3. `dbt_test`: Chạy 17 Data Tests để đóng mộc chứng nhận chất lượng. Tự động đánh FAIL toàn bộ Pipeline nếu dữ liệu bị lỗi.
+| Quyết Định | Lý Do |
+|---|---|
+| dbt trong Airflow container (không có dbt container riêng) | Tránh Environment Drift — dev/prod cùng môi trường |
+| `profiles.yml` mount read-only (`ro`) | Bảo mật — không để Airflow container ghi đè credentials |
+| `generate_schema_name.sql` macro override | Tránh schema xấu kiểu `silver_layer_gold_layer` |
+| Silver `location_name` warn (không fail) | Hanoi CSV lịch sử có thể NULL — không muốn block pipeline |
+| Gold `is_air_quality_alert` nullable | NULL ≠ FALSE — phân biệt "không có data" với "không alert" |

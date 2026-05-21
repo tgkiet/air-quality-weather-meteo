@@ -1,7 +1,7 @@
-# scripts/ — Khởi Tạo Hệ Thống
+# scripts/ — System Scripts
 
 ## Nhiệm vụ
-Chứa các script hệ thống chạy một lần khi khởi tạo infrastructure. Không phải code Python pipeline.
+Chứa các script khởi tạo infrastructure và nạp dữ liệu lịch sử. **Không** phải logic pipeline thường ngày.
 
 ---
 
@@ -9,7 +9,10 @@ Chứa các script hệ thống chạy một lần khi khởi tạo infrastructu
 
 **Cơ chế kích hoạt:** PostgreSQL tự động chạy mọi file trong `/docker-entrypoint-initdb.d/` **đúng một lần duy nhất** khi volume data chưa tồn tại (lần đầu `docker compose up` hoặc sau `docker compose down -v`).
 
-### Phần 1: Airflow Database
+> Dùng file `.sh` thay vì `.sql` vì `.sh` đọc được biến môi trường `$AIRFLOW_DB_USER` từ `.env`. File `.sql` thuần không làm được điều này.
+
+### Phần 1: Tạo Database Airflow riêng
+
 ```sql
 CREATE USER $AIRFLOW_DB_USER WITH PASSWORD '...';
 CREATE DATABASE $AIRFLOW_DB_NAME;
@@ -18,64 +21,181 @@ GRANT ALL ON SCHEMA public TO $AIRFLOW_DB_USER;  -- Postgres 15+ yêu cầu
 ```
 
 **Tại sao tách DB riêng cho Airflow?**
-- `air_quality_db` = Data Warehouse thật (backup định kỳ)
-- `airflow_db` = Metadata DAG/Task của Airflow (có thể tái tạo)
+- `air_quality_db` = Data Warehouse thật → backup định kỳ, giữ lịch sử lâu dài
+- `airflow_db` = Metadata DAG/Task → có thể tái tạo bất kỳ lúc nào
 - Tách riêng: bảo mật độc lập, backup riêng biệt, restore không ảnh hưởng lẫn nhau
 
-### Phần 2: Data Warehouse Schema (Bronze Layer)
+### Phần 2: Bronze Layer Schema + UNIQUE Constraints
+
 ```sql
+-- Bảng realtime (Open-Meteo Forecast API, cập nhật mỗi giờ)
 CREATE TABLE IF NOT EXISTS api_openmeteo_raw_data (
     id              SERIAL PRIMARY KEY,
-    source_type     VARCHAR(100) NOT NULL,   -- 'weather_forecast_hourly' | 'air_quality_hourly'
-    execution_date  TIMESTAMPTZ  NOT NULL,   -- Logical Date của Airflow, KHÔNG phải datetime.now()
-    raw_json        JSONB        NOT NULL,   -- JSON nguyên vẹn từ API
-    ingested_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()  -- Timestamp ghi thực tế
+    source_type     VARCHAR(100) NOT NULL,  -- 'weather_forecast_hourly' | 'air_quality_hourly'
+    execution_date  TIMESTAMPTZ  NOT NULL,  -- Logical Date Airflow — KHÔNG phải NOW()
+    raw_json        JSONB        NOT NULL,  -- JSON nguyên vẹn từ API
+    ingested_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-
--- Mỏ neo Idempotency — BẮT BUỘC để UPSERT hoạt động
+-- Mỏ neo Idempotency: PostgresLoader dùng ON CONFLICT (source_type, execution_date)
 ALTER TABLE api_openmeteo_raw_data
-ADD CONSTRAINT unique_source_execution_date
-UNIQUE (source_type, execution_date);
+ADD CONSTRAINT unique_source_execution_date UNIQUE (source_type, execution_date);
+
+-- Bảng historical (CSV Hà Nội + Archive API backfill HCM & HN gap)
+CREATE TABLE IF NOT EXISTS bronze_historical_weather (
+    id                    SERIAL PRIMARY KEY,
+    datetime              TIMESTAMPTZ NOT NULL,
+    temperature_2m        NUMERIC,
+    relative_humidity_2m  NUMERIC,
+    precipitation         NUMERIC,
+    rain                  NUMERIC,
+    wind_speed_10m        NUMERIC,
+    wind_direction_10m    NUMERIC,
+    pressure_msl          NUMERIC,
+    boundary_layer_height NUMERIC,
+    pm10_cams             NUMERIC,
+    pm2_5_cams            NUMERIC,
+    carbon_monoxide_cams  NUMERIC,
+    nitrogen_dioxide_cams NUMERIC,
+    sulphur_dioxide_cams  NUMERIC,
+    ozone_cams            NUMERIC,
+    location_id           NUMERIC,
+    lat                   NUMERIC,
+    lon                   NUMERIC,
+    location_name         VARCHAR(255),  -- "HN Đống Đa" / "HCM Quận 1" / NULL (CSV cũ)
+    ingested_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Mỏ neo Idempotency: load_historical_csvs.py và backfill_history.py dùng ON CONFLICT
+ALTER TABLE bronze_historical_weather
+ADD CONSTRAINT unique_historical_datetime_lat_lon UNIQUE (datetime, lat, lon);
 ```
 
-**Tại sao cần `UNIQUE CONSTRAINT`?**
-`PostgresLoader` dùng câu lệnh `INSERT ... ON CONFLICT (source_type, execution_date) DO UPDATE`. Nếu không có Constraint này, PostgreSQL sẽ throw lỗi: `"There is no unique constraint matching the ON CONFLICT specification"`.
+---
 
-**Ý nghĩa của từng cột:**
-| Cột | Kiểu | Mục đích |
+## `load_historical_csvs.py` — Nạp CSV Hà Nội
+
+**Mục đích:** Nạp 2 file CSV lịch sử 31 trạm Hà Nội (2022-08-02 → 2025-11-29) vào Bronze.
+
+### Cơ Chế Path Resolution (3 mức ưu tiên)
+
+Script tự động tìm file CSV theo thứ tự:
+
+```
+1. $CSV_DATA_DIR/filename          ← Env var (Docker volume — KHUYẾN NGHỊ)
+2. src/data/filename               ← Copy thủ công vào project
+3. ../Open-Meteo-Dataset/filename  ← Host path (development fallback)
+```
+
+**Trong Docker (cách đang dùng):**
+Docker Compose đã mount `../Open-Meteo-Dataset → /opt/airflow/csv-data` và set `CSV_DATA_DIR=/opt/airflow/csv-data` — script tự động tìm thấy ở mức 1.
+
+### Kỹ Thuật Tối Ưu: COPY → TEMP TABLE → UPSERT
+
+```
+CSV File (874k dòng, 118MB)
+    ↓ COPY EXPERT (stream, không load vào RAM)
+TEMP TABLE (không có index, không có constraint)
+    ↓ INSERT ... ON CONFLICT DO UPDATE (set-based, không loop)
+bronze_historical_weather
+```
+
+Nhanh hơn 10-20× so với INSERT từng dòng. ~900k rows trong ~3 giây.
+
+### Cách Chạy
+
+```bash
+docker exec airflow_container \
+    python3 /opt/airflow/src/scripts/load_historical_csvs.py
+```
+
+### Files CSV Cần Có
+
+| File | Coverage | Dòng | Bắt buộc? |
+|---|---|---|---|
+| `hanoi_aq_weather_MERGED.csv` | 2022-08-02 → 2025-10-19 | ~874,200 | **Bắt buộc** |
+| `hanoi_realtime_data_updated.csv` | 2025-10-20 → 2025-11-29 | ~30,256 | Optional |
+
+---
+
+## `backfill_history.py` — Backfill từ Archive API
+
+**Mục đích:** Nạp dữ liệu lịch sử Weather + Air Quality từ Open-Meteo Archive API. Hỗ trợ cả HCM (full) và HN (gap fill).
+
+### Tham Số
+
+```bash
+python3 backfill_history.py \
+    --location-prefix {HCM|HN} \   # Bắt buộc
+    --start-date YYYY-MM-DD \       # Bắt buộc
+    --end-date   YYYY-MM-DD         # Bắt buộc
+```
+
+### Cách Dùng — 2 Trường Hợp
+
+**Trường hợp 1: Backfill HCM toàn bộ** (không có CSV)
+```bash
+docker exec airflow_container \
+    python3 /opt/airflow/src/scripts/backfill_history.py \
+    --location-prefix HCM \
+    --start-date 2022-08-02 --end-date 2026-05-19
+```
+~22 locations × ~3.8 năm → **30-60 phút**
+
+**Trường hợp 2: Backfill HN gap** (CSV đến 2025-11-29, cần fill tiếp)
+```bash
+docker exec airflow_container \
+    python3 /opt/airflow/src/scripts/backfill_history.py \
+    --location-prefix HN \
+    --start-date 2025-11-30 --end-date 2026-05-19
+```
+~31 locations × ~6 tháng → **5-10 phút**
+
+### Kỹ Thuật Quan Trọng
+
+| Fix | Mô Tả |
+|---|---|
+| **LOGIC-A** | Align AQ/Weather theo `time_str` dict key, không phải positional index → tránh gán PM2.5 sai giờ |
+| **BUG-1** | `safe_get()` guard IndexError khi API trả về array ngắn hơn time array |
+| **BUG-2** | `%s::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'` → timezone đúng khi insert vào TIMESTAMPTZ |
+| **Retry** | Exponential backoff: 4xx không retry, 429/5xx retry tối đa 3 lần |
+| **Idempotent** | `ON CONFLICT (datetime, lat, lon) DO UPDATE` → chạy lại không duplicate |
+
+### Location ID Offset
+
+| Prefix | ID Offset | Lý Do |
 |---|---|---|
-| `source_type` | `VARCHAR` | Phân biệt nguồn dữ liệu |
-| `execution_date` | `TIMESTAMPTZ` | Khóa tự nhiên cho Idempotency |
-| `raw_json` | `JSONB` | Lưu nguyên vẹn, biến đổi sau ở Silver layer |
-| `ingested_at` | `TIMESTAMPTZ` | Audit trail — khi nào data thực sự được ghi |
+| HN (từ CSV) | Dùng `location_id` gốc từ CSV (ví dụ: 2539) | Giữ nguyên ID thực từ OpenAQ |
+| HCM backfill | 3000000 + idx | Tránh conflict với HN CSV IDs |
+| HN gap fill | 4000000 + idx | Tránh conflict với cả HN CSV và HCM |
 
 ---
 
-## Các Python Scripts nạp dữ liệu lịch sử (Historical Loader & Backfiller)
+## Thứ Tự Chạy Khi Setup Lần Đầu
 
-Ngoài việc cào dữ liệu thời gian thực hàng giờ, hệ thống hỗ trợ 2 cơ chế nạp bù dữ liệu quá khứ (Backfill) từ 02/08/2022 đến 29/11/2025:
+```bash
+# 1. Khởi động hệ thống (init_dbs.sh chạy tự động)
+docker compose up -d --build
 
-### 1. `load_historical_csvs.py` (Hà Nội)
-* **Mục đích:** Nạp dữ liệu lịch sử của 31 trạm quan trắc Hà Nội từ file CSV có sẵn.
-* **Cơ chế:** Sử dụng class `CSVLoader` kế thừa từ `BasePostgresLoader`.
-* **Kỹ thuật tối ưu:** Sử dụng Postgres `COPY EXPERT` thông qua Temporary Table, thực hiện UPSERT theo lô (batch) từ Temp Table vào bảng chính. Đạt tốc độ nạp nhanh gấp 10-20 lần so với INSERT thông thường, giải quyết 900.000 dòng dữ liệu trong 3 giây.
-* **Cách chạy:**
-  ```bash
-  docker exec -i airflow_container python3 /opt/airflow/src/scripts/load_historical_csvs.py
-  ```
+# 2. Nạp CSV Hà Nội → bronze_historical_weather (~vài phút)
+docker exec airflow_container \
+    python3 /opt/airflow/src/scripts/load_historical_csvs.py
 
-### 2. `backfill_hcm_history.py` (TP.HCM)
-* **Mục đích:** Nạp dữ liệu lịch sử của 22 quận/huyện TP.HCM từ API Lịch sử của Open-Meteo.
-* **Cơ chế:** Kết nối tới Open-Meteo Archive API và Air Quality API để lấy toàn bộ dữ liệu lịch sử từ 02/08/2022 đến 29/11/2025.
-* **Kỹ thuật tối ưu:**
-  * Đồng bộ hóa (Join) dữ liệu thời tiết và chất lượng không khí theo mốc thời gian bằng Python trước khi nạp.
-  * Tự động gán ID địa điểm mới bắt đầu từ `3000000+` để tránh xung đột với ID trạm Hà Nội.
-  * Sử dụng `execute_values` (UPSERT) kết hợp với `AT TIME ZONE 'Asia/Bangkok'` để chuẩn hóa múi giờ gốc của dữ liệu trước khi đẩy vào Postgres `TIMESTAMPTZ`.
-* **Cách chạy:**
-  ```bash
-  docker exec -i airflow_container python3 /opt/airflow/src/scripts/backfill_hcm_history.py
-  ```
+# 3. Backfill HCM full (~30-60 phút)
+docker exec airflow_container \
+    python3 /opt/airflow/src/scripts/backfill_history.py \
+    --location-prefix HCM \
+    --start-date 2022-08-02 --end-date 2026-05-19
 
----
+# 4. Backfill HN gap (~5-10 phút)
+docker exec airflow_container \
+    python3 /opt/airflow/src/scripts/backfill_history.py \
+    --location-prefix HN \
+    --start-date 2025-11-30 --end-date 2026-05-19
 
-> **Lưu ý chung:** Dùng file `.sh` thay vì `.sql` vì `.sh` có thể đọc biến môi trường `$AIRFLOW_DB_USER` từ `.env`. File `.sql` thuần không làm được điều này.
+# 5. Rebuild Silver + Gold với toàn bộ historical data
+docker exec airflow_container bash -c \
+    "dbt run --full-refresh \
+     --project-dir /opt/airflow/dbt-transform \
+     --profiles-dir /home/airflow/.dbt"
+```
+
+> **Idempotent:** Tất cả các bước đều có thể chạy lại mà không tạo duplicate.

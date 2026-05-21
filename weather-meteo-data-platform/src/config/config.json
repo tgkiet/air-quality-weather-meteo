@@ -1,184 +1,59 @@
 {
   "locations": [
     {
-      "name": "Hanoi Station 2539",
-      "latitude": 21.0218,
-      "longitude": 105.819
-    },
-    {
-      "name": "Hanoi Station 7441",
-      "latitude": 21.0219,
-      "longitude": 105.8188
-    },
-    {
-      "name": "Hanoi Station 1285357",
+      "name": "HN Cầu Giấy",
       "latitude": 21.0478,
       "longitude": 105.8
     },
     {
-      "name": "Hanoi Station 2161290",
+      "name": "HN Nam Từ Liêm Tây",
       "latitude": 21.0024,
       "longitude": 105.7181
     },
     {
-      "name": "Hanoi Station 2161291",
-      "latitude": 21.0398,
-      "longitude": 105.7652
-    },
-    {
-      "name": "Hanoi Station 2161292",
-      "latitude": 21.0152,
-      "longitude": 105.7999
-    },
-    {
-      "name": "Hanoi Station 2161293",
+      "name": "HN Chương Mỹ",
       "latitude": 20.92,
       "longitude": 105.7123
     },
     {
-      "name": "Hanoi Station 2161294",
-      "latitude": 21.0284,
-      "longitude": 105.8556
-    },
-    {
-      "name": "Hanoi Station 2161295",
-      "latitude": 21.0119,
-      "longitude": 105.8644
-    },
-    {
-      "name": "Hanoi Station 2161296",
-      "latitude": 21.0354,
-      "longitude": 105.8529
-    },
-    {
-      "name": "Hanoi Station 2161298",
-      "latitude": 21.032,
-      "longitude": 105.8515
-    },
-    {
-      "name": "Hanoi Station 2161299",
-      "latitude": 21.0399,
-      "longitude": 105.8473
-    },
-    {
-      "name": "Hanoi Station 2161300",
-      "latitude": 21.0263,
-      "longitude": 105.8515
-    },
-    {
-      "name": "Hanoi Station 2161301",
-      "latitude": 20.9949,
-      "longitude": 105.8167
-    },
-    {
-      "name": "Hanoi Station 2161303",
-      "latitude": 21.0074,
-      "longitude": 105.8358
-    },
-    {
-      "name": "Hanoi Station 2161304",
-      "latitude": 21.0327,
-      "longitude": 105.8329
-    },
-    {
-      "name": "Hanoi Station 2161306",
+      "name": "HN Bắc Từ Liêm Tây",
       "latitude": 21.05,
       "longitude": 105.74
     },
     {
-      "name": "Hanoi Station 2161307",
-      "latitude": 21.0269,
-      "longitude": 105.7731
-    },
-    {
-      "name": "Hanoi Station 2161308",
-      "latitude": 21.05,
-      "longitude": 105.782
-    },
-    {
-      "name": "Hanoi Station 2161309",
+      "name": "HN Hoàng Mai Nam",
       "latitude": 20.9481,
       "longitude": 105.8493
     },
     {
-      "name": "Hanoi Station 2161313",
+      "name": "HN Hoàng Mai",
       "latitude": 20.9883,
       "longitude": 105.8549
     },
     {
-      "name": "Hanoi Station 2161314",
-      "latitude": 21.0563,
-      "longitude": 105.7974
-    },
-    {
-      "name": "Hanoi Station 2161315",
-      "latitude": 21.0058,
-      "longitude": 105.7485
-    },
-    {
-      "name": "Hanoi Station 2161316",
-      "latitude": 21.0197,
-      "longitude": 105.8147
-    },
-    {
-      "name": "Hanoi Station 2161318",
-      "latitude": 21.0639,
-      "longitude": 105.8338
-    },
-    {
-      "name": "Hanoi Station 2161320",
+      "name": "HN Đông Anh",
       "latitude": 21.1476,
       "longitude": 105.9159
     },
     {
-      "name": "Hanoi Station 2161321",
+      "name": "HN Hà Đông Đông",
       "latitude": 20.972,
       "longitude": 105.7856
     },
     {
-      "name": "Hanoi Station 2161322",
+      "name": "HN Bắc Từ Liêm",
       "latitude": 21.1105,
       "longitude": 105.7605
     },
     {
-      "name": "Hanoi Station 4946811",
+      "name": "HN Long Biên",
       "latitude": 21.0491,
       "longitude": 105.8831
-    },
-    {
-      "name": "Hanoi Station 4946812",
-      "latitude": 21.0031,
-      "longitude": 105.7947
-    },
-    {
-      "name": "Hanoi Station 4946813",
-      "latitude": 21.0052,
-      "longitude": 105.8418
     },
     {
       "name": "HCM Quận 1",
       "latitude": 10.7754,
       "longitude": 106.6996
-    },
-    {
-      "name": "HCM Quận 3",
-      "latitude": 10.7789,
-      "longitude": 106.687
-    },
-    {
-      "name": "HCM Quận 4",
-      "latitude": 10.7608,
-      "longitude": 106.7071
-    },
-    {
-      "name": "HCM Quận 5",
-      "latitude": 10.7558,
-      "longitude": 106.6683
-    },
-    {
-      "name": "HCM Quận 6",
-      "latitude": 10.7459,
-      "longitude": 106.6392
     },
     {
       "name": "HCM Quận 7",
@@ -191,44 +66,9 @@
       "longitude": 106.6292
     },
     {
-      "name": "HCM Quận 10",
-      "latitude": 10.7725,
-      "longitude": 106.6682
-    },
-    {
-      "name": "HCM Quận 11",
-      "latitude": 10.7656,
-      "longitude": 106.6476
-    },
-    {
       "name": "HCM Quận 12",
       "latitude": 10.8613,
       "longitude": 106.6642
-    },
-    {
-      "name": "HCM Quận Bình Tân",
-      "latitude": 10.7704,
-      "longitude": 106.5996
-    },
-    {
-      "name": "HCM Quận Bình Thạnh",
-      "latitude": 10.8123,
-      "longitude": 106.704
-    },
-    {
-      "name": "HCM Quận Gò Vấp",
-      "latitude": 10.8354,
-      "longitude": 106.674
-    },
-    {
-      "name": "HCM Quận Phú Nhuận",
-      "latitude": 10.801,
-      "longitude": 106.6798
-    },
-    {
-      "name": "HCM Quận Tân Bình",
-      "latitude": 10.8031,
-      "longitude": 106.6522
     },
     {
       "name": "HCM Quận Tân Phú",
@@ -239,11 +79,6 @@
       "name": "HCM Thành phố Thủ Đức",
       "latitude": 10.851,
       "longitude": 106.7549
-    },
-    {
-      "name": "HCM Huyện Bình Chánh",
-      "latitude": 10.6951,
-      "longitude": 106.5909
     },
     {
       "name": "HCM Huyện Cần Giờ",

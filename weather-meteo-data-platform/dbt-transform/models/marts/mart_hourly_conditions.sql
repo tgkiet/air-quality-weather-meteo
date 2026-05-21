@@ -39,6 +39,10 @@ joined AS (
         w.latitude,
         w.longitude,
         w.execution_date,
+        -- BUG-5 FIX: Thêm location_name để Dashboard phân biệt được quận/huyện và trạm.
+        -- Tất cả 53 locations (31 Hà Nội + 22 HCM) sẽ hiển thị tên đầy đủ thay vì chỉ thấy tọa độ số.
+        -- NULL với Hanoi CSV data — Dashboard xử lý bằng COALESCE hoặc BI label.
+        w.location_name,
 
         -- ==========================================
         -- NHÓM 2: CHỈ SỐ THỜI TIẾT (Weather Metrics)
@@ -115,12 +119,17 @@ joined AS (
         END                             AS pm2_5_level,
 
         -- 4d. Cờ Cảnh báo Thời tiết (Weather Alert Flag)
-        --     CHỈ dựa vào dữ liệu thời tiết — luôn có đủ 7 ngày → KHÔNG BAO GIỜ NULL
-        --     Cho phép Dashboard cảnh báo ngay cả khi không có dữ liệu không khí
+        --     LUÔN trả về TRUE/FALSE, KHÔNG BAO GIỜ NULL (phù hợp với not_null test).
+        --     Logic: (1) Nhiệt độ >= 38°C → TRUE (temperature luôn có dữ liệu 7 ngày)
+        --            (2) UV >= 8 VÀ UV không NULL → TRUE (guard UV NULL tường minh)
+        --            (3) Mọi trường hợp còn lại → FALSE
+        --     Không dùng `uv_index >= 8 OR temperature >= 38` trực tiếp vì:
+        --     NULL >= 8 → NULL, và NULL OR FALSE → NULL → ELSE bắt → FALSE (ẩn)
+        --     Cách viết tường minh dưới đây không có NULL ngầm ở bất kỳ nhánh nào.
         CASE
-            WHEN w.uv_index >= 8 OR w.temperature_2m >= 38
-            THEN TRUE
-            ELSE FALSE
+            WHEN w.temperature_2m >= 38                          THEN TRUE
+            WHEN w.uv_index IS NOT NULL AND w.uv_index >= 8      THEN TRUE
+            ELSE                                                      FALSE
         END                             AS is_weather_alert,
 
         -- 4e. Cờ Cảnh báo Không khí (Air Quality Alert Flag)
@@ -136,6 +145,15 @@ joined AS (
     FROM weather AS w
     -- LEFT JOIN: Giữ lại toàn bộ 7 ngày Thời tiết.
     -- Không khí ghép vào khi có (~5 ngày), để NULL khi không có.
+    -- JOIN THEO KHÓA CHÍNH CỦA SILVER LAYER: (forecast_time, latitude, longitude)
+    -- LÝ DO CHỈ DÙNG 3 CỘT NÀY:
+    -- 1. Bảng Silver (slv_weather, slv_aq) đã dùng `DISTINCT ON (forecast_time, lat, lon)`
+    --    đảm bảo tuyệt đối bộ 3 cột này là Khóa Chính (Primary Key).
+    -- 2. Join trên bộ 3 Khóa Chính đảm bảo toán học 100% là phép JOIN 1:1,
+    --    hoàn toàn không có khả năng xảy ra Cartesian Fanout (nhân bản dòng).
+    -- 3. KHÔNG JOIN theo `location_name` vì dữ liệu lịch sử CSV có location_name = NULL,
+    --    việc thêm `location_name` sẽ gây lỗi (NULL = NULL → UNKNOWN → Drop data)
+    --    hoặc ép dùng `IS NOT DISTINCT FROM` (tốn CPU vô ích).
     LEFT JOIN air_quality AS aq
         ON  w.forecast_time = aq.forecast_time
         AND w.latitude      = aq.latitude
@@ -143,4 +161,9 @@ joined AS (
 )
 
 SELECT * FROM joined
-ORDER BY forecast_time ASC
+-- LOGIC-4 FIX: Xóa ORDER BY — không có tác dụng khi materialized='table'.
+-- PostgreSQL không đảm bảo physical storage order, và SELECT sử sau không
+-- kế thừa ORDER BY này. Để tăng tốc query, tạo index thay thế:
+--   CREATE INDEX ON mart_hourly_conditions(forecast_time);
+--   CREATE INDEX ON mart_hourly_conditions(latitude, longitude);
+-- Hai index này có thể được thêm vào dưới dạng dbt post-hook trong schema.yml.

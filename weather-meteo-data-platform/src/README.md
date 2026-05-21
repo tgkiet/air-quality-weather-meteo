@@ -1,6 +1,6 @@
-# Source Code — Extract & Load Layer
+# 🐍 src/ — Extract & Load Layer
 
-Thư mục `src/` chứa toàn bộ logic Python thực hiện **Bước E (Extract)** và **Bước L (Load)** trong cấu trúc ELT. Dựa trên triết lý **Twelve-Factor App**, **Separation of Concerns**, và **Idempotency**.
+> Toàn bộ logic Python cho bước **E (Extract)** và **L (Load)** trong chuỗi ELT. Tuân thủ **OOP**, **Twelve-Factor App**, **Separation of Concerns**, và **Idempotency**.
 
 ---
 
@@ -8,84 +8,113 @@ Thư mục `src/` chứa toàn bộ logic Python thực hiện **Bước E (Extr
 
 ```
 src/
-├── main.py                  # Entrypoint — điều phối Extract & Load
+├── main.py                          # Entrypoint — điều phối Extract & Load
 │
-├── config/                  # Cấu hình ứng dụng → README: config/README.md
-│   ├── config.json                  # URL & params API
-│   └── config_runtime_constant.json # timeout, max_retries, delay
+├── config/
+│   ├── config.json                  # 53 locations + API URLs/params
+│   └── config_runtime_constant.json # timeout, max_retries, retry_delay
 │
-├── extractors/              # Lớp Extract → README: extractors/README.md
-│   └── open_meteo.py        # OpenMeteoExtractor (Session, Retry, Data Contract)
+├── extractors/
+│   └── open_meteo.py                # OpenMeteoExtractor (Session, Retry, Contract)
 │
-├── loaders/                 # Lớp Load → README: loaders/README.md
-│   └── postgres_loader.py   # PostgresLoader (UPSERT, Idempotency, Fail-fast)
+├── loaders/
+│   ├── base_loader.py               # BasePostgresLoader (connect, close, retry)
+│   ├── postgres_loader.py           # UPSERT realtime data → Bronze
+│   └── csv_loader.py                # COPY + UPSERT historical CSV → Bronze
 │
-├── scripts/                 # Khởi tạo hệ thống → README: scripts/README.md
-│   └── init_dbs.sh          # Tạo DB, bảng Bronze, UNIQUE CONSTRAINT
+├── scripts/
+│   ├── init_dbs.sh                  # Khởi tạo DB, tables, UNIQUE constraints
+│   ├── load_historical_csvs.py      # Nạp CSV Hà Nội → bronze_historical_weather
+│   └── backfill_history.py      # Backfill HCM từ Archive API (argparse)
 │
-└── utils/                   # Tiện ích dùng chung → README: utils/README.md
-    ├── config_manager.py    # ConfigManager Singleton
-    └── logger.py            # Logger chuẩn hóa
+└── utils/
+    ├── config_manager.py            # ConfigManager Singleton
+    └── logger.py                    # Console (Docker) / File (local)
 ```
 
 ---
 
-## Documentation Chi Tiết
+## main.py — ELT Entrypoint
 
-| Module | Nội dung |
-|---|---|
-| [extractors/](./extractors/README.md) | Session Pooling, Exponential Backoff Retry, Data Contract Validation |
-| [loaders/](./loaders/README.md) | Fail-fast, UPSERT vs DELETE+INSERT, MVCC, Idempotency |
-| [utils/](./utils/README.md) | Singleton Pattern, Logger theo môi trường, Twelve-Factor Config |
-| [config/](./config/README.md) | Phân biệt 2 loại config, khi nào sửa file nào |
-| [scripts/](./scripts/README.md) | init_dbs.sh, schema Bronze Layer, tại sao cần UNIQUE CONSTRAINT |
-
----
-
-## Các Tính Năng Enterprise-Grade
-
-### 1. Tính Lũy Đẳng (Idempotency) ở Lớp Bronze
-- Pipeline dùng **UPSERT** (`INSERT ... ON CONFLICT DO UPDATE`) thay vì DELETE+INSERT
-- `execution_date` = Airflow `logical_date` (không phải `datetime.now()`) làm Natural Key
-- Chạy 1 lần hay 10 lần cho cùng 1 batch → DB luôn chỉ có 1 dòng duy nhất
-
-### 2. Data Contract Validation (Trạm kiểm duyệt schema)
-- `OpenMeteoExtractor.get_open_meteo_data(params, expected_keys)` nhận Data Contract từ caller
-- Chặn mọi response JSON không đúng schema (kể cả HTTP 200 với nội dung bảo trì)
-- **Dependency Injection**: caller tự định nghĩa contract → class Extractor tái dụng được
-
-### 3. Connection Pooling & Smart Retry
-- `requests.Session` tái dụng TCP connection (tránh Handshake mỗi request)
-- `urllib3.Retry` với Exponential Backoff: 0s → 2s → 4s
-- Chỉ retry HTTP 429/5xx, không retry lỗi 4xx (lỗi client)
-
-### 4. Twelve-Factor App Configuration
-- Magic Numbers (`timeout`, `max_retries`) ra file JSON, không hardcode trong code
-- `ConfigManager` Singleton đọc file JSON đúng 1 lần cho toàn bộ vòng đời ứng dụng
-
----
-
-## Chạy Thử Từ Terminal
+Nhận `--execution_date` từ Airflow BashOperator (Jinja template `{{ logical_date | ts }}`). **Tuyệt đối không** dùng `datetime.now()` — vi phạm Idempotency.
 
 ```bash
-# Từ thư mục weather-meteo-data-platform/
-python src/main.py --execution_date "2026-05-06T10:00:00+00:00"
+# Chạy thủ công (test)
+python src/main.py --execution_date "2026-05-21T04:00:00+00:00"
 ```
 
-`--execution_date` bắt buộc phải truyền vào. Trong Production, Airflow tự truyền qua Jinja Template:
-```python
-bash_command='python3 /opt/airflow/src/main.py --execution_date "{{ logical_date | ts }}"'
+**Luồng xử lý:**
+1. Load config → build batch params (53 lats, 53 lons joined bằng dấu phẩy)
+2. Extract Weather API → `_inject_location_metadata()` → nearest-neighbor match
+3. Extract AQ API → `_inject_location_metadata()`
+4. UPSERT cả 2 vào `api_openmeteo_raw_data` (Bronze)
+
+---
+
+## extractors/open_meteo.py
+
+| Feature | Chi Tiết |
+|---|---|
+| **Session Pooling** | `requests.Session` tái dùng TCP — tránh handshake mỗi request |
+| **Exponential Backoff** | Retry 3 lần: 0s → 2s → 4s. Chỉ retry 429/5xx, không retry 4xx |
+| **Data Contract** | `get_open_meteo_data(params, expected_keys)` — validate schema trước khi return |
+| **Fail-Fast** | `raise` nếu contract fail → Airflow nhận FAILED, không load rác |
+
+---
+
+## loaders/
+
+### base_loader.py
+- `BasePostgresLoader` — base class cho tất cả loaders
+- `connect()` với retry 3 lần, dùng biến môi trường từ `.env`
+- `close()` — đảm bảo không rò rỉ connection (gọi trong `finally`)
+
+### postgres_loader.py
+- UPSERT vào `api_openmeteo_raw_data` với `ON CONFLICT (source_type, execution_date) DO UPDATE`
+- Tên bảng dùng `psycopg2.sql.Identifier` → tránh SQL Injection
+- Serialize `raw_json` với `json.dumps()` → lưu nguyên vẹn JSONB
+
+### csv_loader.py
+- **COPY** từ CSV → TEMP TABLE (nhanh hơn INSERT thông thường 10-20×)
+- UPSERT từ TEMP TABLE → `bronze_historical_weather`
+- Tự động thêm UNIQUE constraint nếu chưa có (idempotent)
+
+---
+
+## scripts/
+
+### init_dbs.sh
+Chạy tự động khi Postgres container khởi tạo lần đầu. Tạo:
+- `api_openmeteo_raw_data` + `UNIQUE(source_type, execution_date)`
+- `bronze_historical_weather` + `UNIQUE(datetime, lat, lon)` + cột `location_name`
+
+### backfill_history.py
+```bash
+# Nhận ngày qua argparse (không hardcode)
+python3 backfill_history.py --start-date 2022-08-02 --end-date 2026-05-19
 ```
+- Filter locations có prefix `"HCM "` từ `config.json`
+- Gọi Archive API riêng biệt cho Weather + AQ
+- **Align AQ/Weather theo `time_str` dict key** (không phải positional index)
+- UPSERT vào `bronze_historical_weather`
+
+### load_historical_csvs.py
+- Tự động detect đường dẫn CSV theo 3 mức ưu tiên:
+  1. `$CSV_DATA_DIR/filename` (env var, dùng cho Docker volume mount)
+  2. `src/data/filename` (trong project — khuyến nghị cho production)
+  3. `../Open-Meteo-Dataset/filename` (host path, chỉ dùng khi dev)
+- `hanoi_aq_weather_MERGED.csv` là **bắt buộc** — script fail nếu không tìm thấy
+- `hanoi_realtime_data_updated.csv` là **optional** — bỏ qua nếu không có
 
 ---
 
 ## Dữ Liệu Thu Thập
 
-### Thời Tiết — `source_type: weather_forecast_hourly`
+### Thời Tiết (`weather_forecast_hourly`)
 | Biến | Đơn Vị | Mô Tả |
 |---|---|---|
 | `temperature_2m` | °C | Nhiệt độ tại 2m |
-| `relative_humidity_2m` | % | Độ ẩm tương đối |
+| `relative_humidity_2m` | % | Độ ẩm |
 | `dew_point_2m` | °C | Điểm sương |
 | `apparent_temperature` | °C | Nhiệt độ cảm nhận |
 | `precipitation_probability` | % | Xác suất có mưa |
@@ -98,22 +127,15 @@ bash_command='python3 /opt/airflow/src/main.py --execution_date "{{ logical_date
 | `wind_gusts_10m` | km/h | Gió giật |
 | `uv_index` | — | Chỉ số UV |
 
-### Chất Lượng Không Khí — `source_type: air_quality_hourly`
+### Chất Lượng Không Khí (`air_quality_hourly`)
 | Biến | Đơn Vị | Mô Tả |
 |---|---|---|
-| `pm10` | μg/m³ | Bụi mịn PM10 |
-| `pm2_5` | μg/m³ | Bụi siêu mịn PM2.5 |
-| `carbon_monoxide` | μg/m³ | CO |
-| `nitrogen_dioxide` | μg/m³ | NO₂ |
-| `sulphur_dioxide` | μg/m³ | SO₂ |
-| `ozone` | μg/m³ | Ozone tầng mặt đất |
+| `pm10` | µg/m³ | Bụi mịn PM10 |
+| `pm2_5` | µg/m³ | Bụi siêu mịn PM2.5 |
+| `carbon_monoxide` | µg/m³ | CO |
+| `nitrogen_dioxide` | µg/m³ | NO₂ |
+| `sulphur_dioxide` | µg/m³ | SO₂ |
+| `ozone` | µg/m³ | Ozone tầng mặt đất |
 | `aerosol_optical_depth` | — | Độ đục quang học |
-| `dust` | μg/m³ | Bụi thô |
+| `dust` | µg/m³ | Bụi thô |
 | `uv_index` | — | Chỉ số UV |
-
-# Tiến hành Backfill dữ liệu cũ đã crawl thành file csv lúc trước
-- Load toàn bộ dữ liệu từ file csv vào DB
-- Sử dụng dbt để transform dữ liệu từ Bronze lên Silver và Gold
-- Dữ liệu được lưu trữ ở định dạng Parquet (dùng Pandas để đọc và lưu)
-- Sử dụng dbt để transform dữ liệu từ Bronze lên Silver và Gold
-- Lưu ý: về lựa chọn chiến lược để làm, kiến trúc để backfill

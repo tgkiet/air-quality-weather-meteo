@@ -1,6 +1,24 @@
-CREATE TABLE api_openmeteo_raw_data (
-    id SERIAL PRIMARY KEY,
-    source_type VARCHAR(50) NOT NULL,
-    raw_json JSONB NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- ⚠️  BUG-4 FIX: File này đã OUTDATED và KHÔNG nên chạy trực tiếp.
+--
+-- Schema thực tế được tạo bởi: src/scripts/init_dbs.sh
+-- (Script đó được PostgreSQL container tự động chạy khi khởi tạo lần đầu)
+--
+-- File này chỉ được giữ lại để tham khảo schema ban đầu (pre-idempotency).
+-- Sự khác biệt so với schema hiện tại:
+--   ✗ Thiếu cột `execution_date` (cột core của Idempotency)
+--   ✗ Dùng `created_at` thay vì `ingested_at` (sai tên cột)
+--   ✗ Thiếu UNIQUE CONSTRAINT (source_type, execution_date) → UPSERT không hoạt động
+--   ✗ VARCHAR(50) thay vì VARCHAR(100) cho source_type
+--
+-- ĐỂ RESET DATABASE: Dùng `docker compose down -v && docker compose up -d`
+-- PostgreSQL sẽ tự động chạy lại init_dbs.sh với schema đúng.
+--
+-- Nếu bạn muốn xem schema hiện tại, hãy mở: src/scripts/init_dbs.sh
+
+-- [DEPRECATED - DO NOT RUN]
+-- CREATE TABLE api_openmeteo_raw_data (
+--     id SERIAL PRIMARY KEY,
+--     source_type VARCHAR(50) NOT NULL,
+--     raw_json JSONB NOT NULL,
+--     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- );

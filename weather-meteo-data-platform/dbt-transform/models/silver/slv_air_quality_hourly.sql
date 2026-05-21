@@ -18,7 +18,9 @@ SELECT DISTINCT ON (forecast_time, latitude, longitude)
 FROM stg_aq
 
 {% if is_incremental() %}
-    WHERE execution_date >= (SELECT COALESCE(max(execution_date), '1900-01-01'::timestamptz) FROM {{ this }})
+    -- LOGIC-2 FIX: Dùng `>` thay vì `>=` để tránh reprocess batch cuối mỗi lần chạy.
+    -- Xem slv_weather_hourly.sql để giải thích đầy đủ.
+    WHERE execution_date > (SELECT COALESCE(max(execution_date), '1900-01-01'::timestamptz) FROM {{ this }})
 {% endif %}
 
 ORDER BY forecast_time, latitude, longitude, execution_date DESC

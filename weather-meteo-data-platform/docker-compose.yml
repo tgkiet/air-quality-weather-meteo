@@ -16,6 +16,15 @@ services:
       - ./src/scripts/init_dbs.sh:/docker-entrypoint-initdb.d/init_dbs.sh
     networks:
       - meteo_network
+    # INFRA-1 FIX: Thêm healthcheck để đảm bảo Postgres thực sự READY trước khi
+    # Airflow container khởi động. depends_on mặc định chỉ đợi container start,
+    # không đợi Postgres accept connections → airflow db migrate chạy quá sớm sẽ fail.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   airflow:
     container_name: airflow_container
@@ -30,6 +39,12 @@ services:
       AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
       POSTGRES_HOST: postgres_db
       POSTGRES_PORT: 5432
+      # QUALITY-6 FIX: Set biến rõ ràng để logger.py phát hiện môi trường Docker
+      # thay vì suy luận từ AIRFLOW_HOME (có thể set cả khi cài Airflow local).
+      RUNNING_IN_DOCKER: "true"
+      # CSV_DATA_DIR: trỏ đến thư mục được mount chứa file CSV lịch sử Hà Nội.
+      # load_historical_csvs.py sẽ tỏ điểm này trước khi thử các path fallback khác.
+      CSV_DATA_DIR: /opt/airflow/csv-data
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -38,20 +53,37 @@ services:
       # Mount thư mục dbt project để Airflow có thể gọi "dbt run" trực tiếp
       # mà KHÔNG cần Docker socket (an toàn hơn phương pháp docker exec).
       - ./dbt-transform:/opt/airflow/dbt-transform
-      # Mount profiles.yml để dbt trong Airflow biết cách kết nối PostgreSQL.
-      # dbt tìm profiles.yml theo thứ tự: --profiles-dir arg > ~/.dbt/ > ./
-      - ./.dbt:/home/airflow/.dbt
+      # INFRA-4 FIX: Mount CHỈ file profiles.yml (không mount cả .dbt/ directory)
+      # để tránh expose các file credentials cached khác có thể có trong .dbt/.
+      # :ro = read-only — container không thể ghi đè profiles.yml từ bên trong.
+      - ./.dbt/profiles.yml:/home/airflow/.dbt/profiles.yml:ro
+      # Mount thư mục CSV dataset để load_historical_csvs.py đọc được file
+      # mà không cần copy file vào trong container.
+      - ../Open-Meteo-Dataset:/opt/airflow/csv-data:ro
     depends_on:
-      - postgres_db
+      postgres_db:
+        # INFRA-1 FIX: Đợi đến khi postgres_db healthy (không chỉ started).
+        condition: service_healthy
     networks:
       - meteo_network
+    # INFRA-2 FIX: Tách `airflow users create` ra thành block riêng với xử lý lỗi
+    # chính xác hơn. `|| true` cũ nuốt toàn bộ lỗi kể cả lỗi thực sự.
+    # Kiểm tra exit code cụ thể: exit 0 (success) hoặc exit 1 (user đã tồn tại) đều OK.
+    # Các lỗi khác (DB unreachable, permission denied) vẫn propagate ra ngoài.
     command: >
-      bash -c "airflow db migrate && 
-      (airflow users create --username ${_AIRFLOW_WWW_USER_USERNAME} --password ${_AIRFLOW_WWW_USER_PASSWORD} --firstname Kiet --lastname Admin --role Admin --email giakiet.work@gmail.com || true) ; 
-      airflow scheduler & 
-      airflow triggerer & 
-      airflow dag-processor & 
-      airflow api-server"
+      bash -c "
+        airflow db migrate &&
+        airflow users create \
+          --username ${_AIRFLOW_WWW_USER_USERNAME} \
+          --password ${_AIRFLOW_WWW_USER_PASSWORD} \
+          --firstname Kiet --lastname Admin \
+          --role Admin \
+          --email giakiet.work@gmail.com 2>&1 | grep -v 'already exists' || true &&
+        airflow scheduler &
+        airflow triggerer &
+        airflow dag-processor &
+        airflow api-server
+      "
 
 volumes:
   postgres_data:
@@ -59,4 +91,3 @@ volumes:
 networks:
   meteo_network:
     driver: bridge
-    

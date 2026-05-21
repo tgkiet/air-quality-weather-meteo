@@ -1,11 +1,6 @@
 import json
-import os
-import time
-import psycopg2
 from psycopg2 import sql, extras, Error
-from dotenv import load_dotenv
 from src.utils.logger import get_logger
-from src.utils.config_manager import config_manager
 from src.loaders.base_loader import BasePostgresLoader
 
 logger = get_logger("PostgresLoader")

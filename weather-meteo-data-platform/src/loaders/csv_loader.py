@@ -39,6 +39,9 @@ class CSVLoader(BasePostgresLoader):
             location_id NUMERIC,
             lat NUMERIC,
             lon NUMERIC,
+            location_name VARCHAR(255),  -- BUG-6 FIX: Tên địa điểm (“HCM Quận 1”, “Hanoi Station 2539”)
+                                         -- NULL cho dữ liệu lịch sử Hanoi nạp từ CSV
+                                         -- (CSV không có cột này, thêm sau chọn NULL default)
             ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         """
@@ -53,11 +56,13 @@ class CSVLoader(BasePostgresLoader):
             with self.connection.cursor() as cursor:
                 cursor.execute(create_table_query)
                 
-                # Kiểm tra xem constraint đã tồn tại chưa trước khi thêm
+                # QUALITY-4 FIX: Thêm điều kiện table_schema = 'public' để tránh
+                # false positive khi có bảng cùng tên ở schema khác (silver_layer, gold_layer).
                 cursor.execute("""
                     SELECT constraint_name 
                     FROM information_schema.table_constraints 
-                    WHERE table_name = 'bronze_historical_weather' 
+                    WHERE table_name = 'bronze_historical_weather'
+                      AND table_schema = 'public'
                       AND constraint_name = 'unique_historical_datetime_lat_lon';
                 """)
                 if not cursor.fetchone():
