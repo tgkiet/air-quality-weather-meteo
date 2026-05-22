@@ -13,14 +13,16 @@
 ---
 
 ## Giới Thiệu
-    - Dự án này trước kia chỉ đơn giản là CALL API và dùng SCRIPT để DOWNLOAD DATA về với dạng CSV từ API Open-Meteo cho toạ độ của 31 toạ độ ở Hà Nội.
-    - Sau đó thực hiện update && upgrade lên DATA PIPELINE hoàn chỉnh, dùng các modern data stack, đồng thời cũng là một DATA PIPELINE END TO END tâm huyết của tôi để đưa vào CV. Luồng xử lý dữ liệu cho 1 toạ độ là TPHCM
-    - NHƯNG, sau khi backfill dữ liệu lịch sử từ file csv tôi mới nhận ra thật chất 31 location Hà Nội đó được api open-meteo gộp grid cell, nên vì thế tôi quyết định nâng cấp cả project này thành một **Data Platform hoàn chỉnh** với:
-      - **Medallion Architecture** (Bronze → Silver → Gold)
-      - **Idempotency** đầy đủ tại mọi tầng (UPSERT everywhere)
-      - **20 grid cells** (10 HN + 10 HCM) sau khi prune config khỏp với API grid resolution
-      - **29 Data Quality Tests** tự động qua dbt
-      - **Dockerized** hoàn toàn với healthcheck và RBAC-ready schema
+Dự án này trước kia chỉ đơn giản là CALL API và dùng SCRIPT để DOWNLOAD DATA về với dạng CSV từ API Open-Meteo cho toạ độ của 31 toạ độ ở Hà Nội.
+
+Sau đó thực hiện update && upgrade lên DATA PIPELINE hoàn chỉnh, dùng các modern data stack, đồng thời cũng là một DATA PIPELINE END TO END tâm huyết của tôi để đưa vào CV. Luồng xử lý dữ liệu cho 1 toạ độ là TPHCM
+
+NHƯNG, sau khi backfill dữ liệu lịch sử từ file csv tôi mới nhận ra thật chất 31 location Hà Nội đó được api open-meteo gộp grid cell, nên vì thế tôi quyết định nâng cấp cả project này thành một **Data Platform hoàn chỉnh** với:
+  - **Medallion Architecture** (Bronze → Silver → Gold)
+  - **Idempotency** đầy đủ tại mọi tầng (UPSERT everywhere)
+  - **20 grid cells** (10 HN + 10 HCM) sau khi prune config khỏp với API grid resolution
+  - **29 Data Quality Tests** tự động qua dbt
+  - **Dockerized** hoàn toàn với healthcheck và RBAC-ready schema
 ---
 
 ## Kiến Trúc Tổng Quan
