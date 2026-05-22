@@ -184,4 +184,4 @@ docker exec airflow_container \
 ## Liên Hệ
 
 - **Email:** giakiet.work@gmail.com
-- **Dataset:** Dữ liệu CSV gitignore do dung lượng lớn - liên hệ để nhận file
+- **Dataset:** Dữ liệu CSV gitignore do dung lượng lớn - liên hệ để nhận file data

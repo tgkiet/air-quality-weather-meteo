@@ -1,3 +1,5 @@
+# Lưu ý: phạm vi ngày tuỳ chọn trong từng câu lệnh
+
 HƯỚNG DẪN KHỞI CHẠY HỆ THỐNG DATA PLATFORM TỪ CON SỐ 0
 
 BƯỚC 1: KHỞI ĐỘNG HỆ THỐNG (Hạ Tầng)
