@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 # Tách riêng ra để tuân thủ nguyên tắc DRY (Don't Repeat Yourself).
 default_args = {
     'owner': 'gkinhere-airflow',
-    'description': 'Orchestrator DAG for OpenMeteo Weather & Air Quality ELT pipeline (53 locations)',
+    'description': 'Orchestrator DAG for OpenMeteo Weather & Air Quality ELT pipeline (20 grid-cell locations)',
     # Airflow tự động retry 3 lần nếu task FAILED, trước khi báo lỗi thật sự.
     # Quan trọng: Retry vẫn dùng cùng execution_date → Đảm bảo Idempotency.
     'retries': 3,

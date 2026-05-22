@@ -39,9 +39,9 @@ joined AS (
         w.latitude,
         w.longitude,
         w.execution_date,
-        -- BUG-5 FIX: Thêm location_name để Dashboard phân biệt được quận/huyện và trạm.
-        -- Tất cả 53 locations (31 Hà Nội + 22 HCM) sẽ hiển thị tên đầy đủ thay vì chỉ thấy tọa độ số.
-        -- NULL với Hanoi CSV data — Dashboard xử lý bằng COALESCE hoặc BI label.
+        -- w.location_name hiển thị tên Grid Cell (HN Cầu Giấy, HCM Quận 1...)
+        -- cho 20 locations (10 HN + 10 HCM) sau khi prune config.
+        -- NULL với Hanoi CSV data (CSV không có cột này) → Dashboard xử lý bằng COALESCE.
         w.location_name,
 
         -- ==========================================

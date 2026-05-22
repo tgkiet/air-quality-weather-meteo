@@ -4,11 +4,11 @@ backfill_history.py — Backfill dữ liệu lịch sử Weather & Air Quality t
 Dùng cho 2 trường hợp:
   1. HCM full backfill (không có CSV):
      python3 backfill_history.py --location-prefix HCM \
-         --start-date 2022-08-02 --end-date 2026-05-19
+         --start-date 2022-08-02 --end-date 2026-05-21
 
   2. HN gap fill (sau khi đã nạp CSV đến 2025-11-29):
      python3 backfill_history.py --location-prefix HN \
-         --start-date 2025-11-30 --end-date 2026-05-19
+         --start-date 2025-11-30 --end-date 2026-05-21
 
 Idempotency: Script có thể chạy lại bất kỳ lúc nào mà không tạo duplicate
              (ON CONFLICT DO UPDATE tại bronze_historical_weather).
@@ -312,11 +312,11 @@ def main():
             "Ví dụ:\n"
             "  # HCM — toàn bộ từ 2022\n"
             "  python3 backfill_history.py --location-prefix HCM "
-            "--start-date 2022-08-02 --end-date 2026-05-19\n"
+            "--start-date 2022-08-02 --end-date 2026-05-21\n"
             "\n"
             "  # HN — chỉ gap sau khi nạp CSV (CSV đến 2025-11-29)\n"
             "  python3 backfill_history.py --location-prefix HN "
-            "--start-date 2025-11-30 --end-date 2026-05-19\n"
+            "--start-date 2025-11-30 --end-date 2026-05-21\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -325,7 +325,7 @@ def main():
         type=str,
         required=True,
         choices=["HCM", "HN"],
-        help="Nhóm locations cần backfill: 'HCM' (22 quận) hoặc 'HN' (31 trạm)"
+        help="Nhóm locations cần backfill: 'HCM' (10 grid cells) hoặc 'HN' (10 grid cells)"
     )
     parser.add_argument(
         "--start-date",

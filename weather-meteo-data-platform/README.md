@@ -12,7 +12,7 @@
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        EXTRACT (Apache Airflow)                      │
 │  Open-Meteo Forecast API        Open-Meteo Archive API    CSV Files  │
-│  (53 locations / batch call)    (backfill_history.py) (Hà Nội)  │
+│  (20 locations / batch call)    (backfill_history.py) (Hà Nội)  │
 └────────────────┬────────────────────────┬────────────────────┬───────┘
                  ▼                        ▼                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -32,8 +32,8 @@
 ┌──────────────────────────────────────────────────────────────────────┐
 │                    GOLD LAYER (Business-Ready)                        │
 │           gold_layer.mart_hourly_conditions (TABLE)                  │
-│    ~20 khu vực đại diện × 168h forecast (~3,360 rows/run)           │
-│    (53 configs, ~20 grid cells thực tế do API merge)                 │
+│    20 locations (10 HN + 10 HCM) × 168h forecast (~3,360 rows/run)     │
+│    sau khi prune config khớp với API grid resolution (~1km)             │
 │    location_name | forecast_time | weather | AQ | alert_flags        │
 └──────────────────────────────────────────────────────────────────────┘
                              ▼
@@ -96,7 +96,7 @@
 ```
 Airflow logical_date ──► main.py --execution_date {logical_date}
     │
-    ├─► OpenMeteoExtractor.get_open_meteo_data(53 locations batch)
+    ├─► OpenMeteoExtractor.get_open_meteo_data(20 locations batch)
     │       └─► _inject_location_metadata()
     │               nearest-neighbor matching (tolerance 0.15°)
     │               inject: requested_lat, requested_lon, location_name
@@ -118,9 +118,9 @@ Airflow logical_date ──► main.py --execution_date {logical_date}
 ### Backfill Pipeline (Chạy 1 lần)
 
 ```bash
-# HCM — Archive API (full, 22 quận từ 2022)
+# HCM — Archive API (10 grid cells từ 2022 đến nay)
 python3 backfill_history.py --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-19
+    --start-date 2022-08-02 --end-date 2026-05-21
     └─► Lấy Weather + AQ theo từng location
     └─► Align AQ/Weather theo time key (dict lookup, không phải positional)
     └─► UPSERT → bronze_historical_weather
@@ -129,7 +129,7 @@ python3 backfill_history.py --location-prefix HCM \
 # Hà Nội — CSV (historical) + API gap
 python3 load_historical_csvs.py         # CSV đến 2025-11-29
 python3 backfill_history.py --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-19   # gap fill
+    --start-date 2025-11-30 --end-date 2026-05-21   # gap fill
 ```
 
 ---
@@ -171,13 +171,13 @@ docker exec airflow_container \
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-19
+    --start-date 2022-08-02 --end-date 2026-05-21
 
 # 5b. Backfill HN gap (CSV đến 2025-11-29, API fill phần còn thiếu ~5-10 phút)
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-19
+    --start-date 2025-11-30 --end-date 2026-05-21
 
 # 6. Build Silver + Gold thủ công
 docker exec airflow_container bash -c \
@@ -221,7 +221,7 @@ weather-meteo-data-platform/
 ├── .env                        # không commit Git
 │
 ├── src/
-│   ├── config/config.json      # 53 locations + API URLs/params
+│   ├── config/config.json      # 20 locations + API URLs/params
 │   ├── extractors/open_meteo.py
 │   ├── loaders/
 │   │   ├── base_loader.py      # Connection pooling

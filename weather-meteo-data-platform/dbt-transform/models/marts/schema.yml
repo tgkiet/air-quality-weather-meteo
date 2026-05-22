@@ -12,7 +12,7 @@ models:
     columns:
       # ── DIMENSIONS ────────────────────────────────────────────────────────
       - name: forecast_time
-        description: "Mốc thời gian dự báo (TIMESTAMPTZ — chuẩn UTC)"
+        description: "Mốc thời gian dự báo (TIMESTAMPTZ - chuẩn UTC)"
         tests:
           - not_null
 
@@ -29,8 +29,8 @@ models:
       - name: location_name
         description: >
           Tên địa điểm theo chuẩn config.json.
-          Hà Nội: "HN [Quận/Huyện]" (31 trạm).
-          TP.HCM: "HCM [Quận/Huyện]" (22 quận/huyện).
+          Hà Nội: "HN [Quận/Huyện]" (10 grid cells).
+          TP.HCM: "HCM [Quận/Huyện]" (10 grid cells).
           NULL chỉ xảy ra với dữ liệu lịch sử Hà Nội nạp từ CSV cũ
           trước khi có cột location_name.
         tests:
@@ -93,7 +93,7 @@ models:
       - name: is_air_quality_alert
         description: >
           Cờ cảnh báo chất lượng không khí (TRUE/FALSE/NULL).
-          TRUE  = PM2.5 >= 55 µg/m³ (Ô nhiễm nặng — AQI "Rất không lành mạnh").
+          TRUE  = PM2.5 >= 55 µg/m³ (Ô nhiễm nặng - AQI "Rất không lành mạnh").
           FALSE = PM2.5 < 55 µg/m³ (Trong ngưỡng an toàn).
-          NULL  = Chưa có dữ liệu dự báo (ngày 6-7, ngoài tầm CAMS).
+          NULL  = Chưa có dữ liệu dự báo (ngày 6-7).
           Lưu ý: NULL ≠ FALSE. Dashboard nên hiển thị 'N/A' thay vì tích xanh.
