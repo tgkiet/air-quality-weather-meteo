@@ -39,8 +39,8 @@ src/
 Nhận `--execution_date` từ Airflow BashOperator (Jinja template `{{ logical_date | ts }}`). **Tuyệt đối không** dùng `datetime.now()` — vi phạm Idempotency.
 
 ```bash
-# Chạy thủ công (test)
-python src/main.py --execution_date "2026-05-21T04:00:00+00:00"
+# Giả lập chạy cron job của ngày hôm nay (Execution Date)
+python src/main.py --execution_date "2026-05-24T04:00:00+00:00"
 ```
 
 **Luồng xử lý:**
@@ -91,7 +91,7 @@ Chạy tự động khi Postgres container khởi tạo lần đầu. Tạo:
 ### backfill_history.py
 ```bash
 # Nhận ngày qua argparse (không hardcode)
-python3 backfill_history.py --start-date 2022-08-02 --end-date 2026-05-19
+python3 backfill_history.py --start-date 2022-08-02 --end-date 2026-05-24
 ```
 - Filter locations có prefix `"HCM "` từ `config.json`
 - Gọi Archive API riêng biệt cho Weather + AQ

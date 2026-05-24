@@ -56,14 +56,14 @@ docker exec airflow_container python3 /opt/airflow/src/scripts/load_historical_c
 Mất khoảng 10-15 phút do phải lấy qua Archive API.
 ```bash
 docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py \
-  --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-21
+  --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-24
 ```
 
 **Bước 2.3: Kéo bù khoảng trống (Gap-fill) cho Hà Nội**
 Kéo phần dữ liệu từ sau khi CSV kết thúc cho đến thời điểm hiện tại. Mất khoảng 2-3 phút.
 ```bash
 docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py \
-  --location-prefix HN --start-date 2025-11-30 --end-date 2026-05-21
+  --location-prefix HN --start-date 2025-11-30 --end-date 2026-05-24
 ```
 
 ---

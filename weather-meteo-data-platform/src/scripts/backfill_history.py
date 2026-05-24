@@ -4,11 +4,11 @@ backfill_history.py — Backfill dữ liệu lịch sử Weather & Air Quality t
 Dùng cho 2 trường hợp:
   1. HCM full backfill (không có CSV):
      python3 backfill_history.py --location-prefix HCM \
-         --start-date 2022-08-02 --end-date 2026-05-21
+         --start-date 2022-08-02 --end-date 2026-05-24
 
   2. HN gap fill (sau khi đã nạp CSV đến 2025-11-29):
      python3 backfill_history.py --location-prefix HN \
-         --start-date 2025-11-30 --end-date 2026-05-21
+         --start-date 2025-11-30 --end-date 2026-05-24
 
 Idempotency: Script có thể chạy lại bất kỳ lúc nào mà không tạo duplicate
              (ON CONFLICT DO UPDATE tại bronze_historical_weather).
@@ -310,13 +310,14 @@ def main():
             "Backfill lịch sử Weather & Air Quality từ Open-Meteo Archive API.\n"
             "\n"
             "Ví dụ:\n"
-            "  # HCM — toàn bộ từ 2022\n"
-            "  python3 backfill_history.py --location-prefix HCM "
-            "--start-date 2022-08-02 --end-date 2026-05-21\n"
-            "\n"
-            "  # HN — chỉ gap sau khi nạp CSV (CSV đến 2025-11-29)\n"
-            "  python3 backfill_history.py --location-prefix HN "
-            "--start-date 2025-11-30 --end-date 2026-05-21\n"
+            "Ví dụ 1 (HCM full backfill):\n"
+            "  python3 src/scripts/backfill_history.py \\\n"
+            "            --location-prefix HCM \\\n"
+            "            --start-date 2022-08-02 --end-date 2026-05-24\n\n"
+            "Ví dụ 2 (HN gap fill):\n"
+            "  python3 src/scripts/backfill_history.py \\\n"
+            "            --location-prefix HN \\\n"
+            "            --start-date 2025-11-30 --end-date 2026-05-24\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -337,7 +338,7 @@ def main():
         "--end-date",
         type=str,
         required=True,
-        help="Ngày kết thúc (YYYY-MM-DD). VD: 2026-05-19"
+        help="Ngày kết thúc (YYYY-MM-DD). VD: 2026-05-24"
     )
     args = parser.parse_args()
 

@@ -120,7 +120,7 @@ Airflow logical_date ──► main.py --execution_date {logical_date}
 ```bash
 # HCM — Archive API (10 grid cells từ 2022 đến nay)
 python3 backfill_history.py --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-21
+    --start-date 2022-08-02 --end-date 2026-05-24
     └─► Lấy Weather + AQ theo từng location
     └─► Align AQ/Weather theo time key (dict lookup, không phải positional)
     └─► UPSERT → bronze_historical_weather
@@ -129,7 +129,7 @@ python3 backfill_history.py --location-prefix HCM \
 # Hà Nội — CSV (historical) + API gap
 python3 load_historical_csvs.py         # CSV đến 2025-11-29
 python3 backfill_history.py --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-21   # gap fill
+    --start-date 2025-11-30 --end-date 2026-05-24   # gap fill
 ```
 
 ---
@@ -168,16 +168,13 @@ docker exec airflow_container \
     python3 /opt/airflow/src/scripts/load_historical_csvs.py
 
 # 5. Backfill lịch sử HCM từ Archive API (~30-60 phút)
-docker exec airflow_container \
-    python3 /opt/airflow/src/scripts/backfill_history.py \
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-21
+    --start-date 2022-08-02 --end-date 2026-05-24
 
-# 5b. Backfill HN gap (CSV đến 2025-11-29, API fill phần còn thiếu ~5-10 phút)
-docker exec airflow_container \
-    python3 /opt/airflow/src/scripts/backfill_history.py \
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-21
+    --start-date 2025-11-30 --end-date 2026-05-24   # gap fill
 
 # 6. Build Silver + Gold thủ công
 docker exec airflow_container bash -c \

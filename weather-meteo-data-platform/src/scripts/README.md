@@ -136,7 +136,7 @@ python3 backfill_history.py \
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-19
+    --start-date 2022-08-02 --end-date 2026-05-24
 ```
 ~22 locations × ~3.8 năm → **30-60 phút**
 
@@ -145,7 +145,7 @@ docker exec airflow_container \
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-19
+    --start-date 2025-11-30 --end-date 2026-05-24
 ```
 ~31 locations × ~6 tháng → **5-10 phút**
 
@@ -183,13 +183,13 @@ docker exec airflow_container \
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-19
+    --start-date 2022-08-02 --end-date 2026-05-24
 
 # 4. Backfill HN gap (~5-10 phút)
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-19
+    --start-date 2025-11-30 --end-date 2026-05-24
 
 # 5. Rebuild Silver + Gold với toàn bộ historical data
 docker exec airflow_container bash -c \
