@@ -77,12 +77,14 @@ services:
     command: >
       bash -c "
         airflow db migrate &&
-        airflow users create \
-          --username ${_AIRFLOW_WWW_USER_USERNAME} \
-          --password ${_AIRFLOW_WWW_USER_PASSWORD} \
-          --firstname Kiet --lastname Admin \
-          --role Admin \
-          --email giakiet.work@gmail.com 2>&1 | grep -v 'already exists' || true &&
+        (for i in {1..3}; do
+          airflow users create \
+            --username ${_AIRFLOW_WWW_USER_USERNAME} \
+            --password ${_AIRFLOW_WWW_USER_PASSWORD} \
+            --firstname Kiet --lastname Admin \
+            --role Admin \
+            --email giakiet.work@gmail.com 2>&1 | grep -v 'already exists' && break || sleep 5;
+        done) || true &&
         airflow scheduler &
         airflow triggerer &
         airflow dag-processor &
