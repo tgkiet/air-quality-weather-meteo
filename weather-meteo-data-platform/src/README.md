@@ -11,7 +11,7 @@ src/
 ├── main.py                          # Entrypoint — điều phối Extract & Load
 │
 ├── config/
-│   ├── config.json                  # 53 locations + API URLs/params
+│   ├── config.json                  # Cấu hình 20 locations + API params
 │   └── config_runtime_constant.json # timeout, max_retries, retry_delay
 │
 ├── extractors/
@@ -44,7 +44,7 @@ python src/main.py --execution_date "2026-05-24T04:00:00+00:00"
 ```
 
 **Luồng xử lý:**
-1. Load config → build batch params (53 lats, 53 lons joined bằng dấu phẩy)
+1. Load config → build batch params (20 lats, 20 lons joined bằng dấu phẩy)
 2. Extract Weather API → `_inject_location_metadata()` → nearest-neighbor match
 3. Extract AQ API → `_inject_location_metadata()`
 4. UPSERT cả 2 vào `api_openmeteo_raw_data` (Bronze)

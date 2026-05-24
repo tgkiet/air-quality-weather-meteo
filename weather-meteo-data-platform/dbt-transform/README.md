@@ -58,6 +58,8 @@ ON t.idx = temp.idx  -- sync theo ordinality index
 
 **CRIT-2 FIX:** Mọi staging model phải **explicit list** đúng thứ tự cột để UNION ALL trong Silver không bị positional mismatch. Không được dùng `SELECT *` trong UNION ALL.
 
+**CRIT-3 FIX:** Xử lý triệt để `location_name` bị NULL trong file CSV lịch sử bằng cách sử dụng thuật toán **Nearest-Neighbor (Euclidean Distance)**. Hệ thống đã pre-calculate khoảng cách và dùng `CASE WHEN` ánh xạ 31 `location_id` cũ trong CSV gộp về đúng 10 tên trạm chính thức trong `config.json` (sai số < 0.15 độ, tương đương logic của luồng Realtime). Việc này được thực hiện ở Staging để giữ nguyên tính chân thực của dữ liệu gốc ở Bronze (Nguyên tắc Medallion).
+
 ---
 
 ## 2. Silver Layer (INCREMENTAL)
@@ -72,17 +74,18 @@ FROM (
     SELECT * FROM {{ ref('stg_historical_weather') }}
 )
 {% if is_incremental() %}
-WHERE execution_date > (
-    SELECT COALESCE(MAX(execution_date), '1900-01-01'::timestamptz)
-    FROM {{ this }}
-)
+    {% if var('execution_date', none) %}
+        WHERE execution_date = '{{ var("execution_date") }}'::timestamptz
+    {% else %}
+        WHERE execution_date >= (SELECT COALESCE(max(execution_date), '1900-01-01'::timestamptz) FROM {{ this }})
+    {% endif %}
 {% endif %}
 ORDER BY forecast_time, latitude, longitude, execution_date DESC
 ```
 
 **Logic giải thích:**
 - `execution_date DESC` → DISTINCT ON giữ bản dự báo **mới nhất** cho mỗi (giờ, vị trí)
-- `> max(execution_date)` thay vì `>=` → không reprocess batch cuối mỗi giờ
+- **Orchestrator-Driven Incremental Pattern**: Dùng `var('execution_date')` tiêm trực tiếp từ Airflow vào dbt. Logic này giúp dbt CHỈ xử lý đúng dữ liệu của lần chạy hiện tại, tránh lãng phí reprocess batch cũ (khắc phục nhược điểm của `>=`) mà vẫn đảm bảo an toàn Idempotency tuyệt đối (kể cả khi Airflow Clear Task). Fallback về `>=` khi chạy tay local.
 - dbt `unique_key = ['forecast_time', 'latitude', 'longitude']` → MERGE đúng
 
 ---

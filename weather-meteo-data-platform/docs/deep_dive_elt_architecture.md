@@ -122,11 +122,17 @@ dbt Silver dùng `materialized='incremental'`. Thay vì quét lại toàn bộ 4
 
 ```sql
 {% if is_incremental() %}
-WHERE execution_date > (SELECT COALESCE(MAX(execution_date), '1900-01-01') FROM {{ this }})
+    {% if var('execution_date', none) %}
+        WHERE execution_date = '{{ var("execution_date") }}'::timestamptz
+    {% else %}
+        WHERE execution_date >= (SELECT COALESCE(MAX(execution_date), '1900-01-01') FROM {{ this }})
+    {% endif %}
 {% endif %}
 ```
 
-Dùng `>` thay vì `>=` để tránh reprocess batch cuối (batch đó đã được xử lý rồi).
+Dùng **Orchestrator-Driven Pattern** (truyền tham số `execution_date` từ Airflow sang dbt qua cờ `--vars`). Phương pháp này tối ưu tuyệt đối ở cả 2 mặt:
+1. **Idempotency (Tính lũy đẳng):** An toàn tuyệt đối khi Clear Task. Dù `max(execution_date)` có ra sao, hệ thống chỉ lọc đúng batch cần sửa chữa. (Dùng `>` sẽ gây lỗi vứt bỏ dữ liệu ở bước này).
+2. **Hiệu suất (Performance):** Truy vấn đúng 1 mốc thời gian, không quét dư thừa batch cuối. (Dùng `>=` sẽ gây thừa thãi lãng phí).
 
 ### Tầng Gold — "Quầy Phục Vụ"
 

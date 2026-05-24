@@ -174,7 +174,7 @@ docker exec airflow_container \
 |---|---|
 | **Idempotency** | UPSERT + `execution_date` từ Airflow `logical_date` |
 | **Nearest-neighbor matching** | Map API response → config location theo toạ độ (tolerance 0.15°) |
-| **API Grid Resolution** | Open-Meteo merge nearby coords — 53 configs → ~20 grid cells thực tế |
+| **API Grid Resolution** | Open-Meteo merge nearby coords — tập trung thành 20 grid cells thực tế |
 | **Time alignment** | AQ/Weather ghép theo `time_str` dict key, không theo array index |
 | **UNION ALL safety** | Explicit column list (đúng thứ tự) ở cả hai bên |
 | **NULL safety** | `IS NULL` guard tường minh trước mọi CASE comparison |

@@ -73,7 +73,7 @@ ADD CONSTRAINT unique_historical_datetime_lat_lon UNIQUE (datetime, lat, lon);
 
 ## `load_historical_csvs.py` — Nạp CSV Hà Nội
 
-**Mục đích:** Nạp 2 file CSV lịch sử 31 trạm Hà Nội (2022-08-02 → 2025-11-29) vào Bronze.
+**Mục đích:** Nạp file CSV lịch sử cho các trạm Hà Nội (2022-08-02 → 2025-11-29) vào Bronze.
 
 ### Cơ Chế Path Resolution (3 mức ưu tiên)
 
@@ -138,7 +138,7 @@ docker exec airflow_container \
     --location-prefix HCM \
     --start-date 2022-08-02 --end-date 2026-05-24
 ```
-~22 locations × ~3.8 năm → **30-60 phút**
+~10 locations × ~3.8 năm → **10-15 phút**
 
 **Trường hợp 2: Backfill HN gap** (CSV đến 2025-11-29, cần fill tiếp)
 ```bash
@@ -147,7 +147,7 @@ docker exec airflow_container \
     --location-prefix HN \
     --start-date 2025-11-30 --end-date 2026-05-24
 ```
-~31 locations × ~6 tháng → **5-10 phút**
+~10 locations × ~6 tháng → **2-3 phút**
 
 ### Kỹ Thuật Quan Trọng
 
@@ -179,13 +179,13 @@ docker compose up -d --build
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/load_historical_csvs.py
 
-# 3. Backfill HCM full (~30-60 phút)
+# 3. Backfill HCM full (~10-15 phút)
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HCM \
     --start-date 2022-08-02 --end-date 2026-05-24
 
-# 4. Backfill HN gap (~5-10 phút)
+# 4. Backfill HN gap (~2-3 phút)
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \

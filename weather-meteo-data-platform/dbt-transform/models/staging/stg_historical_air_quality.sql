@@ -11,8 +11,43 @@ WITH source_data AS (
         ingested_at                               AS execution_date,
         ROUND(CAST(lat AS NUMERIC), 4)            AS latitude,
         ROUND(CAST(lon AS NUMERIC), 4)            AS longitude,
-        -- BUG-5/BUG-6 FIX: NULL với Hanoi CSV, có giá trị với HCM backfill.
-        location_name,
+COALESCE(
+            location_name,
+            CASE 
+                WHEN CAST(location_id AS INT) = 2161318 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 4946812 THEN 'HN Hà Đông Đông'
+                WHEN CAST(location_id AS INT) = 2161307 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 2161301 THEN 'HN Hà Đông Đông'
+                WHEN CAST(location_id AS INT) = 2161293 THEN 'HN Chương Mỹ'
+                WHEN CAST(location_id AS INT) = 2161303 THEN 'HN Hoàng Mai'
+                WHEN CAST(location_id AS INT) = 2161299 THEN 'HN Long Biên'
+                WHEN CAST(location_id AS INT) = 4946811 THEN 'HN Long Biên'
+                WHEN CAST(location_id AS INT) = 7441 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 2539 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 2161321 THEN 'HN Hà Đông Đông'
+                WHEN CAST(location_id AS INT) = 2161304 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 2161290 THEN 'HN Nam Từ Liêm Tây'
+                WHEN CAST(location_id AS INT) = 2161295 THEN 'HN Hoàng Mai'
+                WHEN CAST(location_id AS INT) = 2161296 THEN 'HN Long Biên'
+                WHEN CAST(location_id AS INT) = 2161306 THEN 'HN Bắc Từ Liêm Tây'
+                WHEN CAST(location_id AS INT) = 2161300 THEN 'HN Hoàng Mai'
+                WHEN CAST(location_id AS INT) = 2161308 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 2161313 THEN 'HN Hoàng Mai'
+                WHEN CAST(location_id AS INT) = 2161291 THEN 'HN Bắc Từ Liêm Tây'
+                WHEN CAST(location_id AS INT) = 4946813 THEN 'HN Hoàng Mai'
+                WHEN CAST(location_id AS INT) = 2161294 THEN 'HN Long Biên'
+                WHEN CAST(location_id AS INT) = 2161320 THEN 'HN Đông Anh'
+                WHEN CAST(location_id AS INT) = 2161298 THEN 'HN Long Biên'
+                WHEN CAST(location_id AS INT) = 2161316 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 2161309 THEN 'HN Hoàng Mai Nam'
+                WHEN CAST(location_id AS INT) = 2161292 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 2161315 THEN 'HN Nam Từ Liêm Tây'
+                WHEN CAST(location_id AS INT) = 2161322 THEN 'HN Bắc Từ Liêm'
+                WHEN CAST(location_id AS INT) = 2161314 THEN 'HN Cầu Giấy'
+                WHEN CAST(location_id AS INT) = 1285357 THEN 'HN Cầu Giấy'
+                ELSE 'HN Station ' || CAST(CAST(location_id AS INT) AS VARCHAR)
+            END
+        ) AS location_name,
         datetime                                  AS forecast_time,
         pm10_cams                                 AS pm10,
         pm2_5_cams                                AS pm2_5,

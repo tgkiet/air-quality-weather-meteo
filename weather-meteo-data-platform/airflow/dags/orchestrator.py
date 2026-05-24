@@ -56,7 +56,8 @@ with DAG(
         bash_command=(
             'dbt run '
             '--project-dir /opt/airflow/dbt-transform '
-            '--profiles-dir /home/airflow/.dbt'
+            '--profiles-dir /home/airflow/.dbt '
+            '--vars \'{"execution_date": "{{ logical_date | ts }}"}\''
         ),
     )
 

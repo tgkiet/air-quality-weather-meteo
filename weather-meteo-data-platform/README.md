@@ -110,7 +110,7 @@ Airflow logical_date ──► main.py --execution_date {logical_date}
 
     ↓ (sau khi ELT thành công)
     dbt run  ──► 4 Staging VIEWs
-              ──► 2 Silver INCREMENTAL (DISTINCT ON, execution_date >)
+              ──► 2 Silver INCREMENTAL (DISTINCT ON, execution_date == var)
               ──► 1 Gold TABLE (LEFT JOIN, derived metrics)
     dbt test ──► 29 data quality tests (PASS/FAIL)
 ```
@@ -269,24 +269,14 @@ weather-meteo-data-platform/
 
 ## API Grid Resolution
 
-Open-Meteo Forecast/Archive API snap toạ độ về lưới model riêng (~1km resolution). Khi nhiều locations trong config có toạ độ cách nhau <0.1° (thường gặp ở các quận nội thành), API tự động merge chúng về cùng 1 điểm lưới và chỉ trả về 1 response item.
-
-### Ảnh Hưởng Thực Tế
-
-| Metric | Config | Thực tế API |
-|---|---|---|
-| HN locations | 31 | ~10 grid cells |
-| HCM locations | 22 | ~10 grid cells |
-| **Tổng** | **53** | **~20 khu vực đại diện** |
+Open-Meteo Forecast/Archive API snap toạ độ về lưới model riêng (~1-10km resolution). Pipeline được thiết kế để sử dụng đúng **20 grid cells đại diện** (10 HN, 10 HCM) để bao phủ toàn bộ các khu vực trọng điểm.
 
 ### Cách Pipeline Xử Lý
 
-1. **`_inject_location_metadata()`** trong `main.py`: Với mỗi API response item, dùng **nearest-neighbor matching** (tolerance 0.15°) để tìm config location gần nhất và gán `location_name`. Không có response item nào bị "UNKNOWN".
+1. **Luồng Realtime (`_inject_location_metadata()`):** Với mỗi API response item, hệ thống gán trực tiếp `location_name` từ cấu hình 20 trạm gốc. 
+   **Luồng Historical (`dbt Staging`):** Áp dụng công thức ánh xạ (mapping) để quy đổi các trạm đo cũ từ file CSV lịch sử về đúng 20 trạm chuẩn, đảm bảo dữ liệu quá khứ và hiện tại hoàn toàn đồng nhất.
 
-2. **Kết quả trong Silver/Gold**: Mỗi "khu vực đại diện" (grid cell) chứa dữ liệu thời tiết đại diện cho **tất cả các quận nằm trong bán kính ~5km** xung quanh đó. Đây là giới hạn của API công khai miễn phí.
-
-3. **Không mất dữ liệu, chỉ giảm độ phân giải không gian**: Các quận cách nhau <1km (như HCM Quận 5 và Quận 10) sẽ có cùng chỉ số thời tiết — đây là hành vi đúng và được kỳ vọng.
-
+2. **Kết quả trong Silver/Gold**: Mỗi "khu vực đại diện" (grid cell) chứa dữ liệu thời tiết đại diện cho **tất cả các quận nằm trong bán kính ~5km** xung quanh đó. Đây là hành vi chuẩn mực của API khí tượng học.
 ### Nếu Cần Độ Phân Giải Cao Hơn
 
 Xem xét Open-Meteo **Commercial API** hoặc nguồn dữ liệu khác (VD: VNMHA, WeatherAPI) có resolution cao hơn cho các điểm đô thị dày đặc.

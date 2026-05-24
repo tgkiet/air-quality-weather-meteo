@@ -107,12 +107,14 @@
       "weather_params": {
         "current": "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m",
         "hourly": "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index",
-        "timezone": "Asia/Bangkok"
+        "timezone": "Asia/Bangkok",
+        "past_days": 3
       },
       "aq_url": "https://air-quality-api.open-meteo.com/v1/air-quality",
       "aq_params": {
         "hourly": "pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,aerosol_optical_depth,dust,uv_index",
-        "timezone": "Asia/Bangkok"
+        "timezone": "Asia/Bangkok",
+        "past_days": 3
       }
     }
   }

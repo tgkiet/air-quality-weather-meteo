@@ -16,6 +16,15 @@
 --
 -- SCHEMA: Được cấu hình là gold_layer trong dbt_project.yml
 --   (Tách biệt khỏi silver_layer để phân quyền RBAC)
+--
+-- LƯU Ý QUAN TRỌNG CHO TƯƠNG LAI (Historical Mapping Artifact):
+--   Trong quá trình Backfill dữ liệu lịch sử (2022-2025), nhiều trạm đo vật lý 
+--   (toạ độ lat/lon khác nhau) được ánh xạ (map) chung về 1 `location_name` đại diện (VD: HN Cầu Giấy).
+--   Vì khóa chính của Silver là (forecast_time, lat, lon), bảng Gold sẽ xuất hiện 
+--   nhiều dòng cho cùng 1 (forecast_time, location_name). 
+--   CÁCH XỬ LÝ (BI Tool): Khi trực quan hóa trên Superset, luôn sử dụng hàm tổng hợp `AVG(metric)` 
+--   khi Group By theo `location_name`. Không dùng `SUM()` vì sẽ cộng dồn các tọa độ bị trùng.
+--   Với dữ liệu Realtime (từ giữa 2026 trở đi), hệ thống chỉ có 1 tọa độ duy nhất cho mỗi location_name.
 -- ============================================================
 
 WITH weather AS (

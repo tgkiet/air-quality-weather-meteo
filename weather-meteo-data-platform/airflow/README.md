@@ -44,13 +44,14 @@ airflow/
 ```bash
 python3 /opt/airflow/src/main.py --execution_date "{{ logical_date | ts }}"
 ```
-- Gọi Open-Meteo Batch API (53 locations/call)
+- Gọi Open-Meteo Batch API (20 locations/call)
 - UPSERT vào Bronze: `api_openmeteo_raw_data`
 
 **Task 2 — `dbt_run`:**
 ```bash
 dbt run --project-dir /opt/airflow/dbt-transform \
-        --profiles-dir /home/airflow/.dbt
+        --profiles-dir /home/airflow/.dbt \
+        --vars '{"execution_date": "{{ logical_date | ts }}"}'
 ```
 - Staging VIEW → Silver INCREMENTAL → Gold TABLE
 - 7 models, ~2-3 giây
@@ -74,7 +75,7 @@ bash_command='python3 /opt/airflow/src/main.py --execution_date "{{ logical_date
 
 - `logical_date` = thời điểm lên lịch, **KHÔNG** phải `datetime.now()`
 - Chạy lại cùng run → cùng `execution_date` → Bronze UPSERT → không tạo duplicate
-- Silver INCREMENTAL filter: `execution_date > max(...)` → chỉ process batch mới
+- Silver INCREMENTAL filter: `execution_date == var('execution_date')` → Chỉ process chính xác lô dữ liệu của Airflow Run đó (Orchestrator-Driven).
 
 ---
 
