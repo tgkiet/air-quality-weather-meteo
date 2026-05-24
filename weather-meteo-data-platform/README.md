@@ -50,8 +50,8 @@
 | Extract | Python (OOP) | 3.13 | Batch API call, nearest-neighbor location matching |
 | Storage | PostgreSQL | 16 | 3-tầng Bronze/Silver/Gold, JSONB, UNIQUE constraints |
 | Transform | dbt-core | 1.9.0 | LATERAL unnest, DISTINCT ON dedup, LEFT JOIN |
-| Infrastructure | Docker Compose | 2.x | Healthcheck, service dependency, RBAC-ready |
-| Visualization | Apache Superset | — | Dashboard từ Gold layer |
+| Infrastructure | Docker Compose | 2.x | Healthcheck, service dependency, DRY YAML anchors |
+| Visualization | Apache Superset | 6.1.0 | 5-Container Architecture (App, Init, Worker, Beat, Redis) |
 
 ---
 

@@ -110,3 +110,62 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     END \$BODY\$;
 
 EOSQL
+
+# =========================================================================
+# PHẦN 3: CÀI ĐẶT CHO SUPERSET DATABASE (Metadata: Dashboard, Chart, User)
+# =========================================================================
+# Superset cần 1 database riêng để lưu cấu hình nội bộ (không phải data của bạn).
+# Tách riêng để dễ backup, restore, và không ảnh hưởng đến air_quality_db.
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+
+    -- Tạo User riêng cho Superset
+    CREATE USER $SUPERSET_DB_USER WITH PASSWORD '$SUPERSET_DB_PASSWORD';
+
+    -- Tạo Database riêng cho Superset
+    CREATE DATABASE $SUPERSET_DB_NAME;
+
+    -- Cấp toàn quyền cho Superset User trên Database này
+    GRANT ALL PRIVILEGES ON DATABASE $SUPERSET_DB_NAME TO $SUPERSET_DB_USER;
+
+    -- Đối với Postgres 15+, cần cấp thêm quyền trên schema public
+    \c $SUPERSET_DB_NAME
+    GRANT ALL ON SCHEMA public TO $SUPERSET_DB_USER;
+
+EOSQL
+
+# =========================================================================
+# PHẦN 4: CẤP QUYỀN ĐỌC GOLD LAYER CHO SUPERSET
+# =========================================================================
+# Superset chỉ cần quyền SELECT (đọc) vào air_quality_db.gold_layer.
+# KHÔNG cấp quyền ghi — nguyên tắc Least Privilege (đặc quyền tối thiểu).
+#
+# BUG FIX: Phải PRE-CREATE schema gold_layer trước khi GRANT.
+# Lý do: init_dbs.sh chạy khi PostgreSQL khởi tạo lần đầu, trước khi dbt chạy.
+# Nếu GRANT USAGE ON SCHEMA gold_layer mà schema chưa tồn tại → lỗi "schema does not exist".
+# Giải pháp: tạo schema tại đây, dbt sẽ dùng schema đã có để tạo bảng (dbt không xóa schema).
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+
+    -- Cấp quyền kết nối vào air_quality_db cho superset_user
+    GRANT CONNECT ON DATABASE $POSTGRES_DB TO $SUPERSET_DB_USER;
+
+    -- PRE-CREATE schema gold_layer để có thể GRANT ngay bây giờ.
+    -- dbt sẽ CREATE TABLE bên trong schema này (không tạo lại schema).
+    CREATE SCHEMA IF NOT EXISTS gold_layer;
+
+    -- Cấp quyền USAGE trên schema gold_layer (nhìn thấy schema)
+    GRANT USAGE ON SCHEMA gold_layer TO $SUPERSET_DB_USER;
+
+    -- Cấp quyền SELECT trên tất cả các bảng hiện tại trong gold_layer
+    -- (lần đầu chạy chưa có bảng nào, nhưng câu lệnh này vẫn hợp lệ)
+    GRANT SELECT ON ALL TABLES IN SCHEMA gold_layer TO $SUPERSET_DB_USER;
+
+    -- ĐÂY LÀ DÒNG QUAN TRỌNG NHẤT:
+    -- Cấp quyền SELECT trên các bảng SẼ ĐƯỢC TẠO TRONG TƯƠNG LAI bởi dbt.
+    -- Không có dòng này, sau khi dbt run tạo mart_hourly_conditions,
+    -- Superset vẫn bị lỗi "permission denied for table mart_hourly_conditions".
+    ALTER DEFAULT PRIVILEGES
+        FOR USER $POSTGRES_USER   -- Khi POSTGRES_USER (owner dbt chạy) tạo table mới
+        IN SCHEMA gold_layer
+        GRANT SELECT ON TABLES TO $SUPERSET_DB_USER;
+
+EOSQL

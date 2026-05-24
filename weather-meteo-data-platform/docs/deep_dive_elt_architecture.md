@@ -434,3 +434,29 @@ lỗi bằng `return None` là nguyên nhân số 1 của các bug khó debug tr
 - [ ] Đã chạy xong 5 bước trong `lenhdocker.txt`
 - [ ] `dbt test` trả về `PASS=29 WARN=0 ERROR=0`
 - [ ] Bảng `gold_layer.mart_hourly_conditions` có dữ liệu
+
+---
+
+## 11. Kiến Trúc Phân Tán Của Superset (Approach 1 - Production Grade)
+
+Thay vì chạy Superset trong 1 container duy nhất (chỉ phù hợp test local), hệ thống này được triển khai theo đúng chuẩn **5-Container Architecture** từ repo chính thức của Apache Superset:
+
+### Tại sao cần 5 Containers?
+1. **`superset_app`**: Web UI chính phục vụ người dùng.
+2. **`superset_init`**: Container vòng đời ngắn (chỉ chạy 1 lần) để migrate database, tạo admin user và setup Roles/Permissions.
+3. **`superset_worker`**: Xử lý các tác vụ nền (Async Tasks) thông qua Celery (ví dụ: gửi email báo cáo, render ảnh thumbnail).
+4. **`superset_worker_beat`**: Trình lập lịch (Scheduler) của Celery.
+5. **`redis`**: Message Broker trung gian để `superset_app` giao tiếp với `superset_worker` và làm bộ đệm Caching.
+
+### Quản lý Dependency Thông Minh
+Official Image của Apache Superset (`apache/superset:6.1.0`) **KHÔNG** đi kèm driver `psycopg2` mặc định và script nội bộ chủ động bỏ qua việc cài nó cho worker container. 
+Thay vì build một Image custom (làm tăng thời gian deploy), chúng ta dùng tuyệt chiêu:
+- Mount file `requirements-local.txt` (chứa `psycopg2-binary==2.9.9`) vào `/app/docker/requirements-local.txt`.
+- Khi container khởi chạy, script `docker-bootstrap.sh` (có sẵn trong image) sẽ tự động phát hiện file này và cài đặt driver cho TẤT CẢ container, giúp Worker kết nối trơn tru với DB mà không bị crash.
+
+### Cơ Chế RBAC (Role-Based Access Control)
+Superset kết nối với Data Warehouse thông qua 1 user chuyên trách (`superset_user`).
+Quyền hạn (Least Privilege) được thiết lập chặt chẽ trong `init_dbs.sh`:
+- Chỉ có quyền `CONNECT` tới `air_quality_db`.
+- Chỉ có quyền `SELECT` trên schema `gold_layer`.
+- Quan trọng nhất: `ALTER DEFAULT PRIVILEGES` đảm bảo khi dbt tự động tạo thêm các bảng mới vào ngày mai, `superset_user` vẫn tự động có quyền đọc mà không cần cấp quyền lại.
