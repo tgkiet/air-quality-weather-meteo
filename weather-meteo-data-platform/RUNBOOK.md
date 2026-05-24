@@ -114,8 +114,21 @@ Sau khi đăng nhập Superset lần đầu, bạn cần trỏ nó vào Database
    postgresql+psycopg2://superset_user:<password>@postgres_db:5432/air_quality_db
    ```
    *(Thay `<password>` bằng giá trị của biến `SUPERSET_DB_PASSWORD` trong file `.env`)*
-4. Nhấn **Test Connection**. Nếu hiện "Connection looks good!" thì bấm **Connect**.
-5. Vào **SQL Lab**, thử chạy truy vấn kiểm tra dữ liệu:
+4. **CỰC KỲ QUAN TRỌNG (Fix Ảo Giác Timezone):** 
+   Chuyển sang tab **Advanced** -> Mở rộng mục **Other**. Trong ô **ENGINE PARAMETERS**, dán cấu hình ép múi giờ Việt Nam sau đây để dữ liệu hiển thị đúng thực tế:
+   ```json
+   {
+     "connect_args": {
+       "options": "-c timezone=Asia/Bangkok"
+     }
+   }
+   ```
+5. Nhấn **Test Connection**. Nếu hiện "Connection looks good!" thì bấm **Connect**.
+
+> 💡 **Quan trọng:** Để vẽ biểu đồ chính xác, cấu hình múi giờ và hiểu rõ ý nghĩa từng cột dữ liệu (như tại sao phải dùng `AVG` thay vì `SUM`, hoặc tại sao ngày tương lai bị mất dữ liệu PM2.5), vui lòng đọc tài liệu chuyên sâu: 
+> 👉 **[Sổ tay Khai thác Dữ liệu & Trực quan hóa (Superset Playbook)](./docs/superset_visualization_guide.md)**
+    
+Vào **SQL Lab**, thử chạy truy vấn kiểm tra dữ liệu:
    ```sql
    SELECT * FROM gold_layer.mart_hourly_conditions LIMIT 10;
    ```

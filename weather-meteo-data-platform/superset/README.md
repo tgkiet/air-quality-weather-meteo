@@ -26,7 +26,6 @@ Thay vì "nhồi nhét" toàn bộ hệ sinh thái Superset vào một container
 3. **`superset_worker`**: Xử lý các tác vụ nền (Async Tasks) thông qua Celery. Giúp UI không bị treo khi người dùng chạy các câu query SQL nặng, xuất file CSV lớn hoặc render ảnh thumbnail.
 4. **`superset_worker_beat`**: Trình lập lịch (Scheduler) của Celery, dùng để trigger các tác vụ định kỳ (ví dụ: gửi email báo cáo hàng ngày).
 5. **`redis`**: Message Broker trung gian. `superset_app` gửi task vào Redis, `worker` nhận task từ Redis. Đồng thời Redis đóng vai trò là bộ đệm Caching siêu tốc cho các biểu đồ.
-
 ---
 
 ## 3. Quản Lý Dependency: "Cái Bẫy" Của Official Image
