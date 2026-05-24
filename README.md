@@ -35,19 +35,19 @@ NHƯNG, sau khi backfill dữ liệu lịch sử từ file csv tôi mới nhận
 └──────────────┬──────────────────────┬───────────────┬───────┘
                ▼                      ▼               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   🥉 BRONZE LAYER (Raw)                      │
+│                   BRONZE LAYER (Raw)                      │
 │  api_openmeteo_raw_data          bronze_historical_weather  │
 │  JSONB · UPSERT · Idempotency    1 row/giờ/location · 2022+│
 └──────────────────────────┬──────────────────────────────────┘
                            ▼  dbt (LATERAL unnest + UNION ALL)
 ┌─────────────────────────────────────────────────────────────┐
-│                   🥈 SILVER LAYER (Cleaned)                  │
+│                   SILVER LAYER (Cleaned)                  │
 │  slv_weather_hourly              slv_air_quality_hourly     │
 │  INCREMENTAL · DISTINCT ON       INCREMENTAL · DISTINCT ON  │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼  dbt (LEFT JOIN + Derived Metrics)
 ┌─────────────────────────────────────────────────────────────┐
-│                   🥇 GOLD LAYER (Business-Ready)             │
+│                   GOLD LAYER (Business-Ready)             │
 │          gold_layer.mart_hourly_conditions (TABLE)           │
 │   location_name · forecast_time · weather · AQ · alerts     │
 └──────────────────────────┬──────────────────────────────────┘
@@ -64,11 +64,11 @@ NHƯNG, sau khi backfill dữ liệu lịch sử từ file csv tôi mới nhận
 | | Hà Nội | TP.HCM |
 |---|---|---|
 | **Locations** | 10 grid cells |	10 grid cells |
-| **Lịch sử** | 2022-08-02 → 2026-05-19 (CSV + API gap) | 2022-08-02 → 2026-05-19 (Archive API) |
+| **Lịch sử** | 2022-08-02 → 2026-05-24 (CSV + API gap) | 2022-08-02 → 2026-05-24 (Archive API) |
 | **Realtime** | Dự báo 7 ngày tới (cập nhật mỗi giờ) | Dự báo 7 ngày tới (cập nhật mỗi giờ) |
 | **Nguồn** | OpenAQ CSV (2022→11/2025) + Open-Meteo Archive | Open-Meteo Forecast + Archive API |
 
-> 📌 Config ban đầu có 53 locations (31 HN + 22 HCM). Sau khi kiểm tra thực tế, Open-Meteo API chỉ trả về 20 grid cells độc lập (các quận nội thành gần nhau bị merge). Config đã được prune xuống **20 locations** để tránh duplicate và lãng phí API calls.
+>  Config ban đầu có 53 locations (31 HN + 22 HCM). Sau khi kiểm tra thực tế, Open-Meteo API chỉ trả về 20 grid cells độc lập (các quận nội thành gần nhau bị merge). Config đã được prune xuống **20 locations** để tránh duplicate và lãng phí API calls.
 
 ---
 
@@ -77,21 +77,21 @@ NHƯNG, sau khi backfill dữ liệu lịch sử từ file csv tôi mới nhận
 ```
 air-quality-weather-meteo/
 │
-├── 📄 README.md                        ← Bạn đang đọc file này
-├── 📄 requirements.txt                 ← Dependencies Python local dev
-├── 📄 .gitignore
+├──  README.md                        ← Bạn đang đọc file này
+├──  requirements.txt                 ← Dependencies Python local dev
+├──  .gitignore
 │
-├── 📁 Open-Meteo-Dataset/              ← Raw CSV lịch sử Hà Nội 2022-2025
+├──  Open-Meteo-Dataset/              ← Raw CSV lịch sử Hà Nội 2022-2025
 │   └── hanoi_aq_weather_MERGED.csv     ← (gitignore — liên hệ để nhận file)
 │
-└── 📁 weather-meteo-data-platform/     ← Core Platform (toàn bộ hệ thống)
-    ├── 📄 README.md                    ← Platform overview & Quick Start
-    ├── 📄 docker-compose.yml           ← Infra: Postgres + Airflow
-    ├── 📄 Dockerfile                   ← Airflow + dbt image
-    ├── 📄 .env                         ← không commit
+└──  weather-meteo-data-platform/     ← Core Platform (toàn bộ hệ thống)
+    ├──  README.md                    ← Platform overview & Quick Start
+    ├──  docker-compose.yml           ← Infra: Postgres + Airflow
+    ├──  Dockerfile                   ← Airflow + dbt image
+    ├──  .env                         ← không commit
     │
-    ├── 📁 src/                         ← Extract & Load Layer
-    │   ├── 📄 README.md
+    ├──  src/                         ← Extract & Load Layer
+    │   ├──  README.md
     │   ├── config/config.json          ← 20 locations + API config
     │   ├── extractors/open_meteo.py    ← Session + Retry + Data Contract
     │   ├── loaders/                    ← PostgresLoader + CSVLoader
@@ -99,12 +99,12 @@ air-quality-weather-meteo/
     │   ├── utils/                      ← Logger + ConfigManager
     │   └── main.py                     ← ELT entrypoint
     │
-    ├── 📁 airflow/                     ← Orchestration Layer
-    │   ├── 📄 README.md
+    ├──  airflow/                     ← Orchestration Layer
+    │   ├──  README.md
     │   └── dags/orchestrator.py        ← DAG @hourly, 3 tasks
     │
-    └── 📁 dbt-transform/               ← Transform Layer
-        ├── 📄 README.md
+    └──  dbt-transform/               ← Transform Layer
+        ├──  README.md
         └── models/
             ├── staging/                ← VIEW: flatten JSON + timezone
             ├── silver/                 ← INCREMENTAL: dedup + union
@@ -143,14 +143,14 @@ docker exec airflow_container \
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-21
+    --start-date 2022-08-02 --end-date 2026-05-24
 
 # Bước 3: Backfill HN gap (10 grid cells × ~6 tháng · ~5-10 phút)
 # CSV chỉ đến 2025-11-29 → cần kéo thêm phần còn thiếu
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-21
+    --start-date 2025-11-30 --end-date 2026-05-24
 ```
 
 > ⚠️ **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`

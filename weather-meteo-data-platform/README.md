@@ -1,8 +1,8 @@
-# ☁️ Vietnam Weather & Air Quality Data Platform
+# ☁️ Vietnam Weather & Air Quality Data Platform ☁️
 
 > **Enterprise-grade Data Engineering pipeline** tự động thu thập, chuẩn hóa và phân tích dữ liệu **thời tiết & chất lượng không khí** cho **20 khu vực quan trắc** trên 2 thành phố — **10 grid cells Hà Nội** và **10 grid cells TP.HCM** — cập nhật mỗi giờ và lưu trữ lịch sử từ năm 2022.
 >
-> 📌 **Về Grid Resolution:** config.json ban đầu có 53 locations (31 HN + 22 HCM). Sau khi phân tích thực tế, Open-Meteo API chỉ trả về **20 grid cells độc lập** (resolution ~1km — các quận nội thành gần nhau được merge). Config đã được prune xuống 20 locations để loại bỏ duplicate và API call lãng phí.
+>  **Về Grid Resolution:** config.json ban đầu có 53 locations (31 HN + 22 HCM). Sau khi phân tích thực tế, Open-Meteo API chỉ trả về **20 grid cells độc lập** (resolution ~1km — các quận nội thành gần nhau được merge). Config đã được prune xuống 20 locations để loại bỏ duplicate và API call lãng phí.
 
 ---
 

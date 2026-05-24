@@ -1,4 +1,4 @@
-# 🐍 src/ — Extract & Load Layer
+#  src/ — Extract & Load Layer
 
 > Toàn bộ logic Python cho bước **E (Extract)** và **L (Load)** trong chuỗi ELT. Tuân thủ **OOP**, **Twelve-Factor App**, **Separation of Concerns**, và **Idempotency**.
 
