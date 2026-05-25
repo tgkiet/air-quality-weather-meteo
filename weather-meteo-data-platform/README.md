@@ -264,6 +264,8 @@ weather-meteo-data-platform/
 | [src/README.md](./src/README.md) | Extract & Load Layer |
 | [airflow/README.md](./airflow/README.md) | DAG, schedule, Airflow auth |
 | [dbt-transform/README.md](./dbt-transform/README.md) | Models, materializations, tests |
+| [RUNBOOK.md](./RUNBOOK.md) | Hướng dẫn vận hành và Setup Database cho Superset |
+| [docs/superset_visualization_guide.md](./docs/superset_visualization_guide.md) | Bí kíp vẽ biểu đồ & 3 Lớp Phòng thủ Timezone |
 
 ---
 

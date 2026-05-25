@@ -113,6 +113,8 @@ services:
     env_file: .env
     user: root  # Cần thiết để docker-bootstrap.sh tự động cài psycopg2 driver
     environment:
+      # Fix lỗi lệch 7 tiếng của biến 'now' trong Advanced Filter (ép OS Timezone về GMT+7)
+      TZ: Asia/Bangkok
       # Map các biến từ .env tổng sang format mà superset_config.py kỳ vọng
       DATABASE_DIALECT: postgresql
       DATABASE_USER: ${SUPERSET_DB_USER}

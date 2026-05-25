@@ -77,3 +77,18 @@ ORDER BY forecast_time DESC
 LIMIT 50;
 ```
 Đoạn truy vấn này bốc ra ngay những cột "tinh túy" nhất, chứng minh giá trị của hệ thống ETL đằng sau. Chúc bạn vẽ Dashboard thành công!
+
+---
+
+## 5. Lưới Phòng Thủ Múi Giờ (3-Layer Timezone Defense)
+Hệ thống này được thiết kế với 3 lớp phòng thủ để xử lý triệt để căn bệnh "Ảo giác Timezone 7 tiếng" kinh điển của các BI Tool:
+
+1. **Lớp 1 (Frontend): `AT TIME ZONE 'Asia/Bangkok'` trong dbt**
+   * *Tác dụng:* Ép dữ liệu thành Naive Timestamp tại tầng Gold.
+   * *Ý nghĩa:* Buộc thư viện biểu đồ ECharts trên trình duyệt hiển thị đúng chữ số giờ (00:00) thay vì tự lùi về giờ UTC.
+2. **Lớp 2 (Backend): Biến môi trường `TZ: Asia/Bangkok` trong Docker**
+   * *Tác dụng:* Đồng bộ OS timezone của container Superset (Flask).
+   * *Ý nghĩa:* Đảm bảo khi bạn dùng từ khóa `now` trong Advanced Filter, Python sẽ trả về đúng giờ thực tế của Việt Nam thay vì giờ UTC.
+3. **Lớp 3 (Database): JSON `{"connect_args": {"options": "-c timezone=Asia/Bangkok"}}`**
+   * *Tác dụng:* Cấu hình múi giờ ở mức Session khi mở kết nối đến PostgreSQL.
+   * *Ý nghĩa:* Khi bạn dùng SQL Lab để chạy các hàm thời gian động như `CURRENT_DATE` hay `NOW()`, Postgres sẽ tự động tính toán theo chuẩn GMT+7.
