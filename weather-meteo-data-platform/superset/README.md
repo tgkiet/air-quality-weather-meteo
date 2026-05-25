@@ -17,15 +17,17 @@ superset/
 
 ---
 
-## 2. Giải Phẫu Kiến Trúc 5-Container
+## 2. Tại Sao Lại Là 5-Container Architecture?
 
-Thay vì "nhồi nhét" toàn bộ hệ sinh thái Superset vào một container duy nhất (chỉ phù hợp để test local), hệ thống này được triển khai với 5 containers chuyên biệt. Điều này mô phỏng chính xác cách một hệ thống Enterprise vận hành:
+Thay vì nhồi nhét toàn bộ hệ sinh thái Superset vào một container duy nhất (chỉ phù hợp để test local), hệ thống này được triển khai với 5 containers chuyên biệt. Điều này mô phỏng chính xác cách một hệ thống Enterprise vận hành:
 
 1. **`superset_app`**: Web UI chính phục vụ người dùng, chạy qua Web Server Gunicorn.
 2. **`superset_init`**: Container vòng đời ngắn (chạy 1 lần lúc startup). Đảm nhiệm việc migrate database, khởi tạo Admin user và thiết lập các Roles/Permissions mặc định.
 3. **`superset_worker`**: Xử lý các tác vụ nền (Async Tasks) thông qua Celery. Giúp UI không bị treo khi người dùng chạy các câu query SQL nặng, xuất file CSV lớn hoặc render ảnh thumbnail.
 4. **`superset_worker_beat`**: Trình lập lịch (Scheduler) của Celery, dùng để trigger các tác vụ định kỳ (ví dụ: gửi email báo cáo hàng ngày).
 5. **`redis`**: Message Broker trung gian. `superset_app` gửi task vào Redis, `worker` nhận task từ Redis. Đồng thời Redis đóng vai trò là bộ đệm Caching siêu tốc cho các biểu đồ.
+
+**Kiến trúc này giúp UI luôn mượt mà, các tác vụ nặng được đẩy sang Worker xử lý ngầm.**
 ---
 
 ## 3. Quản Lý Dependency: "Cái Bẫy" Của Official Image
@@ -37,7 +39,7 @@ Official Image của Apache Superset (`apache/superset:6.1.0`) **KHÔNG** cài s
 Thay vì viết một Dockerfile mới (làm tăng thời gian deploy và bảo trì), chúng ta tận dụng cơ chế Override của Apache:
 - Khai báo `psycopg2-binary==2.9.9` trong file `requirements-local.txt`.
 - Dùng Docker Compose mount file này vào đúng đường dẫn `/app/docker/requirements-local.txt` bên trong container.
-- Khi container khởi chạy, script `docker-bootstrap.sh` sẽ tự động phát hiện file này và cài đặt driver cho **TẤT CẢ** các containers một cách an toàn và nhất quán.
+- Khi container khởi chạy, script `docker-bootstrap.sh` sẽ tự động phát hiện file này và cài đặt driver `psycopg2-binary==2.9.9` cho **TẤT CẢ** các containers một cách an toàn và nhất quán.
 
 ---
 
@@ -45,15 +47,21 @@ Thay vì viết một Dockerfile mới (làm tăng thời gian deploy và bảo 
 
 ### Single Source of Truth
 File `superset_config.py` làm nhiệm vụ "bắc cầu" giữa các biến môi trường và ứng dụng. 
-**Nguyên tắc cốt lõi:** Tuyệt đối KHÔNG hardcode bất kỳ credential nào (như `SUPERSET_SECRET_KEY` hay Database Password) vào trong file code. Tất cả phải được kéo từ file `.env` ngoài root của project để đảm bảo an toàn bảo mật.
+
+- Đọc các biến từ `.env` (được Docker Compose truyền vào).
+- Cấu hình chuỗi kết nối `SQLALCHEMY_DATABASE_URI`.
+- Cấu hình kết nối Redis cho Celery (`REDIS_CELERY_DB`) và Cache (`REDIS_RESULTS_DB`).
+- Khai báo các tính năng mở rộng (`FEATURE_FLAGS`).
+
+**Nguyên tắc:** KHÔNG hardcode bất kỳ credential nào (như `SUPERSET_SECRET_KEY` hay DB Password) vào trong file `superset_config.py`. Tất cả được quản lý tập trung ở file `.env` root.
 
 ### Phân Quyền (Role-Based Access Control - RBAC)
-Superset không được cấp quyền `postgres` (Admin tối cao). Thay vào đó, nó kết nối qua một user bị giới hạn quyền hạn: `superset_user`.
+Superset không được cấp quyền `postgres` (Admin). Thay vào đó, nó kết nối qua một user bị giới hạn quyền hạn: `superset_user`.
 
 Quyền hạn của user này được thiết lập chặt chẽ trong `src/scripts/init_dbs.sh`:
 - **Chỉ có quyền CONNECT** tới `air_quality_db`.
 - **Chỉ có quyền SELECT (Đọc)** trên duy nhất schema `gold_layer`.
-- **Cơ chế Idempotency Vĩnh Cửu:** Thông qua lệnh `ALTER DEFAULT PRIVILEGES`, khi công cụ `dbt` tự động tạo ra một bảng mới vào ngày mai, `superset_user` vẫn TỰ ĐỘNG có quyền đọc bảng đó mà không cần Quản trị viên (DBA) can thiệp thủ công.
+- **Cơ chế Idempotency Vĩnh Cửu:** Thông qua lệnh `ALTER DEFAULT PRIVILEGES`, khi công cụ `dbt` tự động tạo ra một bảng mới vào ngày mai, `superset_user` vẫn TỰ ĐỘNG có quyền đọc bảng đó mà không cần Quản trị viên can thiệp thủ công.
 
 ---
 
@@ -78,3 +86,12 @@ Quyền hạn của user này được thiết lập chặt chẽ trong `src/scr
 > # 3. Khởi động và Build lại từ đầu
 > docker compose up -d --build
 > ```
+
+---
+
+## 6. Hướng Dẫn Khai Thác & Trực Quan Hóa
+
+File README này tập trung giải thích các quyết định về **Kiến trúc Hạ tầng (Infrastructure)**. 
+
+Sau khi hệ thống Superset đã khởi chạy thành công, để biết cách kết nối Database, sửa lỗi lệch múi giờ (Timezone) và vẽ các biểu đồ phân tích đúng chuẩn (tránh các lỗi dùng sai hàm `SUM`/`AVG`), vui lòng chuyển sang đọc tài liệu nghiệp vụ Data Analyst tại:
+👉 **[Sổ tay Khai thác Dữ liệu & Trực quan hóa (Superset Playbook)](../docs/superset_visualization_guide.md)**

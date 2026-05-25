@@ -24,7 +24,7 @@ Trong Superset, để vẽ được biểu đồ, bạn không thể truy vấn 
 1. Trên thanh công cụ trên cùng, chọn **Datasets**.
 2. Bấm nút **+ DATASET** ở góc phải.
 3. Chọn theo thứ tự:
-   *   **Database:** `air_quality_db` (Tên connection bạn vừa tạo).
+   *   **Database:** `PostgreSQL` (Đây là tên mặc định của connection bạn vừa tạo).
    *   **Schema:** `gold_layer`
    *   **Table:** `mart_hourly_conditions`
 4. Bấm **CREATE DATASET AND CREATE CHART** để bắt đầu hành trình.
