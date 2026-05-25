@@ -114,8 +114,8 @@ Sau khi đăng nhập Superset lần đầu, bạn cần trỏ nó vào Database
    postgresql+psycopg2://superset_user:<password>@postgres_db:5432/air_quality_db
    ```
    *(Thay `<password>` bằng giá trị của biến `SUPERSET_DB_PASSWORD` trong file `.env`. Lưu ý: đây là tài khoản Read-only đặc biệt tạo riêng cho Superset dựa trên nguyên tắc Least Privilege).*
-4. **CỰC KỲ QUAN TRỌNG (Fix Ảo Giác Timezone):** 
-   Chuyển sang tab **Advanced** -> Mở rộng mục **Other**. Trong ô **ENGINE PARAMETERS**, dán cấu hình ép múi giờ Việt Nam sau đây để dữ liệu hiển thị đúng thực tế:
+4. **CỰC KỲ QUAN TRỌNG (Cấu hình Timezone cho Bộ Lọc):** 
+   Chuyển sang tab **Advanced** -> Mở rộng mục **Other**. Trong ô **ENGINE PARAMETERS**, dán cấu hình sau để các bộ lọc thời gian (như "Today", "Last 7 days") hoạt động chuẩn xác theo giờ Việt Nam:
    ```json
    {
      "connect_args": {

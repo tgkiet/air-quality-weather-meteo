@@ -44,10 +44,15 @@ joined AS (
         -- NHÓM 1: TRƯỜNG ĐỊNH DANH (Dimensions)
         -- Xác định "Dữ liệu này là của giờ nào, ở đâu"
         -- ==========================================
-        w.forecast_time,
+        -- BI TIMEZONE HACK (Quan trọng):
+        -- Ép TIMESTAMPTZ (chuẩn UTC) về lại Naive Timestamp (giờ địa phương Việt Nam).
+        -- Mục đích: Vô hiệu hóa lỗi lệch 7 tiếng của ECharts trên Superset (ECharts luôn ép
+        -- trục X render theo UTC). Khi truyền Naive Timestamp, Superset buộc phải hiển thị 
+        -- đúng chữ số giờ của Việt Nam.
+        w.forecast_time AT TIME ZONE 'Asia/Bangkok' AS forecast_time,
         w.latitude,
         w.longitude,
-        w.execution_date,
+        w.execution_date AT TIME ZONE 'Asia/Bangkok' AS execution_date,
         -- w.location_name hiển thị tên Grid Cell (HN Cầu Giấy, HCM Quận 1...)
         -- cho 20 locations (10 HN + 10 HCM) sau khi prune config.
         -- NULL với Hanoi CSV data (CSV không có cột này) → Dashboard xử lý bằng COALESCE.

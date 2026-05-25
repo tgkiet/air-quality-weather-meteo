@@ -2,8 +2,8 @@
 
 Tài liệu này là cẩm nang bắt buộc dành cho Data Analyst / BI Developer trước khi bắt tay vào xây dựng Dashboard trên hệ thống Air Quality & Weather Data Platform bằng Apache Superset.
 
-## 1. Cấu hình Bắt Buộc: Sửa lỗi Ảo giác Timezone
-Kho dữ liệu PostgreSQL lưu trữ thời gian ở chuẩn quốc tế (`TIMESTAMPTZ` - UTC). Để Superset không hiển thị sai lệch giờ (ví dụ: 12h trưa Việt Nam hiển thị thành 5h sáng), bạn phải cấu hình ép múi giờ khi kết nối Database.
+## 1. Cấu hình Bắt Buộc: Đồng bộ Timezone cho Bộ Lọc (Filters)
+Kho dữ liệu PostgreSQL lưu trữ thời gian ở chuẩn quốc tế (`TIMESTAMPTZ` - UTC). Để các bộ lọc thời gian của Superset (như "Today", "Last 7 days") tự động nhận diện đúng múi giờ Việt Nam khi truy vấn, bạn phải cấu hình ép múi giờ ở phần Connection.
 
 **Cách thực hiện:**
 1. Trong màn hình Edit Database Connection của Superset, chuyển sang tab **Advanced**.
@@ -38,6 +38,7 @@ Trong Superset, để vẽ được biểu đồ, bạn không thể truy vấn 
 ### Nguyên tắc 3.1: Chọn đúng Cột Thời Gian (Time Column)
 Hệ thống có 2 cột mang định dạng thời gian. Bạn **tuyệt đối phải chọn `forecast_time`** làm trục X (Time Column) cho mọi biểu đồ Time-series.
 *   ✅ **`forecast_time`**: Điểm thời gian thực tế mà thời tiết/không khí diễn ra (Quá khứ, Hiện tại, hoặc Tương lai).
+    > 💡 **Bí mật kỹ thuật:** Cột này đã được tự động ép về múi giờ Việt Nam (Naive Local Time) ngay từ tầng Data Warehouse để vô hiệu hóa lỗi lệch 7 tiếng của thư viện ECharts trên Superset. Bạn cứ yên tâm vẽ mà không lo bị lệch giờ!
 *   ❌ **`execution_date`**: Chỉ là metadata nội bộ, ghi nhận thời điểm con bot Airflow chạy lệnh kéo dữ liệu.
 
 ### Nguyên tắc 3.2: Luôn dùng Hàm `AVG` thay vì `SUM`
