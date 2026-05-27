@@ -43,6 +43,8 @@ services:
       AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
       POSTGRES_HOST: postgres_db
       POSTGRES_PORT: 5432
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
       # QUALITY-6 FIX: Set biến rõ ràng để logger.py phát hiện môi trường Docker
       # thay vì suy luận từ AIRFLOW_HOME (có thể set cả khi cài Airflow local).
       RUNNING_IN_DOCKER: "true"

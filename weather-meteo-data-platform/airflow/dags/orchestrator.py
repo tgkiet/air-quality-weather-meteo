@@ -78,12 +78,20 @@ with DAG(
         ),
     )
 
+    # TASK 4: ALERTING — Telegram Alert Job
+    # Chạy độc lập sau khi dbt_test đảm bảo dữ liệu Gold layer đã sạch sẽ và chính xác.
+    # Sử dụng PythonOperator thông qua BashOperator để tránh xung đột dependency nội bộ Airflow.
+    send_alert = BashOperator(
+        task_id='send_alert',
+        bash_command='python3 /opt/airflow/src/scripts/alert_job.py',
+    )
+
     # TASK DEPENDENCIES - Thứ tự chạy
     # Đọc: fetch_data PHẢI hoàn thành → dbt_run mới được kích hoạt
     #      dbt_run  PHẢI hoàn thành → dbt_test mới được kích hoạt
-    # Nếu fetch_data FAILED → dbt_run và dbt_test bị SKIP (không chạy).
-    # Đảm bảo không Transform dữ liệu rác khi bước Load thất bại.
-    fetch_data >> dbt_run >> dbt_test
+    #      dbt_test PHẢI hoàn thành → send_alert mới được kích hoạt
+    # Nếu dbt_test FAILED (Dữ liệu rác lọt vào) → send_alert bị SKIP (Không gửi báo cáo sai cho sếp).
+    fetch_data >> dbt_run >> dbt_test >> send_alert
 
 # DESIGN NOTES
 # Tại sao không tách fetch_weather và fetch_aq thành 2 Task riêng?
