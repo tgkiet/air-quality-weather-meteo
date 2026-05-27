@@ -20,6 +20,7 @@ import json
 import time
 import argparse
 import requests
+from datetime import date as _date
 from psycopg2.extras import execute_values
 from psycopg2 import Error
 
@@ -88,49 +89,56 @@ class HistoricalBackfiller(BasePostgresLoader):
         success_count = 0
         fail_count    = 0
 
-        for idx, loc in enumerate(target_locations):
-            location_id = id_offset + idx
-            name        = loc["name"]
-            lat         = loc["latitude"]
-            lon         = loc["longitude"]
+        # try/finally đảm bảo self.close() luôn được gọi kể cả khi
+        # KeyboardInterrupt (Ctrl+C) hoặc SystemExit xảy ra giữa chừng.
+        # Lý do cần thiết: script có thể chạy hàng giờ, user Ctrl+C là thực tế.
+        # KeyboardInterrupt/SystemExit không phải subclass của Exception →
+        # không bị catch bởi inner `except Exception` trong loop.
+        try:
+            for idx, loc in enumerate(target_locations):
+                location_id = id_offset + idx
+                name        = loc["name"]
+                lat         = loc["latitude"]
+                lon         = loc["longitude"]
+
+                logger.info(
+                    f"[{idx+1}/{len(target_locations)}] {name} "
+                    f"(lat={lat}, lon={lon}) | id={location_id}"
+                )
+
+                try:
+                    weather_data = self._fetch_weather_history(lat, lon)
+                    time.sleep(1.0)  # polite delay tránh rate limit
+
+                    aq_data = self._fetch_aq_history(lat, lon)
+                    time.sleep(1.0)
+
+                    if not weather_data:
+                        logger.error(f"  ✗ Weather fetch failed for {name}. Skipping.")
+                        fail_count += 1
+                        continue
+
+                    # AQ có thể None nếu không có data cho khu vực này — vẫn load weather
+                    self._merge_and_load(location_id, lat, lon, name, weather_data, aq_data or {})
+                    logger.info(f"  ✓ Loaded {name}.")
+                    success_count += 1
+
+                except Exception as e:
+                    logger.error(f"  ✗ Error processing {name}: {e}")
+                    fail_count += 1
+                    continue  # Skip location này, tiếp tục location khác
 
             logger.info(
-                f"[{idx+1}/{len(target_locations)}] {name} "
-                f"(lat={lat}, lon={lon}) | id={location_id}"
+                f"Backfill complete: {success_count}/{len(target_locations)} locations OK, "
+                f"{fail_count} failed."
             )
-
-            try:
-                weather_data = self._fetch_weather_history(lat, lon)
-                time.sleep(1.0)  # polite delay tránh rate limit
-
-                aq_data = self._fetch_aq_history(lat, lon)
-                time.sleep(1.0)
-
-                if not weather_data:
-                    logger.error(f"  ✗ Weather fetch failed for {name}. Skipping.")
-                    fail_count += 1
-                    continue
-
-                # AQ có thể None nếu không có data cho khu vực này — vẫn load weather
-                self._merge_and_load(location_id, lat, lon, name, weather_data, aq_data or {})
-                logger.info(f"  ✓ Loaded {name}.")
-                success_count += 1
-
-            except Exception as e:
-                logger.error(f"  ✗ Error processing {name}: {e}")
-                fail_count += 1
-                continue  # Skip location này, tiếp tục location khác
-
-        self.close()
-        logger.info(
-            f"Backfill complete: {success_count}/{len(target_locations)} locations OK, "
-            f"{fail_count} failed."
-        )
-        if fail_count > 0:
-            logger.warning(
-                f"{fail_count} location(s) failed. Chạy lại script là idempotent "
-                f"(ON CONFLICT DO UPDATE) — các location đã thành công sẽ không bị duplicate."
-            )
+            if fail_count > 0:
+                logger.warning(
+                    f"{fail_count} location(s) failed. Chạy lại script là idempotent "
+                    f"(ON CONFLICT DO UPDATE) — các location đã thành công sẽ không bị duplicate."
+                )
+        finally:
+            self.close()
 
     # ──────────────────────────────────────────────────────────────
     # PRIVATE: Fetch Methods
@@ -341,6 +349,18 @@ def main():
         help="Ngày kết thúc (YYYY-MM-DD). VD: 2026-05-24"
     )
     args = parser.parse_args()
+
+    # Validate định dạng và thứ tự ngày trước khi làm bất cứ điều gì.
+    # Fail-fast tại đây rõ ràng hơn là để API trả về empty data sau nhiều giây.
+    try:
+        start_d = _date.fromisoformat(args.start_date)
+        end_d   = _date.fromisoformat(args.end_date)
+    except ValueError as e:
+        parser.error(f"Định dạng ngày không hợp lệ (cần YYYY-MM-DD): {e}")
+    if start_d > end_d:
+        parser.error(
+            f"--start-date ({args.start_date}) phải <= --end-date ({args.end_date})."
+        )
 
     # Thêm dấu cách để khớp với prefix trong config.json ("HCM Quận 1", "HN Đống Đa")
     prefix = args.location_prefix + " "

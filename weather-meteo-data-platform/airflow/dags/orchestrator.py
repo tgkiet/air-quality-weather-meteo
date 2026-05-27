@@ -87,6 +87,8 @@ with DAG(
 
 # DESIGN NOTES
 # Tại sao không tách fetch_weather và fetch_aq thành 2 Task riêng?
-#   → Vì cả 2 đều gọi chung API Open-Meteo, chia sẻ cùng session HTTP.
-#   → Tách ra = over-engineering + risk duplicate connection + khó maintain.
-#   → Pipeline này chọn gộp 1 Task = đơn giản, đủ dùng, dễ debug.
+#   → Đơn giản hơn: 1 task duy nhất dễ debug, dễ monitor hơn 2 task song song.
+#   → Atomic: nếu 1 trong 2 API call thất bại, cả batch bị FAILED — không load data nửa vời.
+#   → Không có lợi ích network khi tách: weather_url và aq_url là 2 host khác nhau
+#     (api.open-meteo.com vs air-quality-api.open-meteo.com) → không thể share TCP connection.
+#   → Pipeline này chọn gộp 1 Task = đơn giản, đủ dùng, dễ maintain.

@@ -90,12 +90,21 @@ Chạy tự động khi Postgres container khởi tạo lần đầu. Tạo:
 
 ### backfill_history.py
 ```bash
-# Nhận ngày qua argparse (không hardcode)
-python3 backfill_history.py --start-date 2022-08-02 --end-date 2026-05-24
+# Backfill HCM toàn bộ (không có CSV, từ 2022 đến nay)
+python3 backfill_history.py \
+    --location-prefix HCM \
+    --start-date 2022-08-02 --end-date 2026-05-24
+
+# Gap-fill Hà Nội (sau khi CSV kết thúc ở 2025-11-29)
+python3 backfill_history.py \
+    --location-prefix HN \
+    --start-date 2025-11-30 --end-date 2026-05-24
 ```
-- Filter locations có prefix `"HCM "` từ `config.json`
+- `--location-prefix` là **bắt buộc** (`HCM` hoặc `HN`)
+- Filter locations có prefix tương ứng từ `config.json`
 - Gọi Archive API riêng biệt cho Weather + AQ
 - **Align AQ/Weather theo `time_str` dict key** (không phải positional index)
+- Validate date format và thứ tự (start ≤ end) trước khi kết nối DB
 - UPSERT vào `bronze_historical_weather`
 
 ### load_historical_csvs.py
