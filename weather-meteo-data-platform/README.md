@@ -283,3 +283,4 @@ Open-Meteo Forecast/Archive API snap toạ độ về lưới model riêng (~1-1
 
 Xem xét Open-Meteo **Commercial API** hoặc nguồn dữ liệu khác (VD: VNMHA, WeatherAPI) có resolution cao hơn cho các điểm đô thị dày đặc.
 
+# TÍNH NĂNG TIẾP THEO: BOT TELEGRAM FOR WEATHER & AQ ALERT
