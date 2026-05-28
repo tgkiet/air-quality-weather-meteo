@@ -50,15 +50,18 @@ dbt-transform/
 
 **Kỹ thuật chính:**
 ```sql
--- LATERAL unnest cùng lúc nhiều mảng JSON song song
-LATERAL jsonb_array_elements_text(raw_json->'hourly'->'time') WITH ORDINALITY AS t(val, idx)
-LATERAL jsonb_array_elements_text(raw_json->'hourly'->'temperature_2m') WITH ORDINALITY AS temp(val, idx)
-ON t.idx = temp.idx  -- sync theo ordinality index
+-- WITH ORDINALITY trả về index 1-based cùng với giá trị trong mảng.
+-- idx::int - 1 chuyển sang 0-based để index vào các mảng dữ liệu khác.
+FROM source_data,
+LATERAL jsonb_array_elements_text(raw_json->'hourly'->'time') WITH ORDINALITY AS t(time_str, idx)
+
+-- Mọi mảng khác (temperature_2m, pm10, ...) được đọc theo vị trí idx - 1:
+CAST(raw_json->'hourly'->'temperature_2m'->>(t.idx::int - 1) AS NUMERIC) AS temperature_2m
 ```
 
-**CRIT-2 FIX:** Mọi staging model phải **explicit list** đúng thứ tự cột để UNION ALL trong Silver không bị positional mismatch. Không được dùng `SELECT *` trong UNION ALL.
+**** Mọi staging model phải **explicit list** đúng thứ tự cột để UNION ALL trong Silver không bị positional mismatch. Không được dùng `SELECT *` trong UNION ALL.
 
-**CRIT-3 FIX:** Xử lý triệt để `location_name` bị NULL trong file CSV lịch sử bằng cách sử dụng thuật toán **Nearest-Neighbor (Euclidean Distance)**. Hệ thống đã pre-calculate khoảng cách và dùng `CASE WHEN` ánh xạ 31 `location_id` cũ trong CSV gộp về đúng 10 tên trạm chính thức trong `config.json` (sai số < 0.15 độ, tương đương logic của luồng Realtime). Việc này được thực hiện ở Staging để giữ nguyên tính chân thực của dữ liệu gốc ở Bronze (Nguyên tắc Medallion).
+**** Dữ liệu hoàn toàn 100% được lấy từ API. `location_name` được chèn trực tiếp từ config, không còn tình trạng NULL như trước đây, giúp lược đồ Medallion sạch sẽ tuyệt đối từ Bronze đến Gold.
 
 ---
 
@@ -121,7 +124,7 @@ LEFT JOIN air_quality aq
 | Layer | Số Tests | Coverage |
 |---|---|---|
 | Bronze Sources | 7 | `not_null` id/source_type/execution_date/datetime/lat/lon; `unique` id |
-| Silver | 8 | `not_null` forecast_time/lat/lon/location_name (×2 models); warn cho location_name |
+| Silver | 8 | `not_null` forecast_time/lat/lon/location_name (×2 models) |
 | Gold | 14 | `not_null` key dims + is_weather_alert + temperature_2m; `accepted_values` cho 3 level columns |
 
 ```bash
@@ -171,5 +174,4 @@ dbt test --select slv_weather_hourly \
 | dbt trong Airflow container (không có dbt container riêng) | Tránh Environment Drift — dev/prod cùng môi trường |
 | `profiles.yml` mount read-only (`ro`) | Bảo mật — không để Airflow container ghi đè credentials |
 | `generate_schema_name.sql` macro override | Tránh schema xấu kiểu `silver_layer_gold_layer` |
-| Silver `location_name` warn (không fail) | Hanoi CSV lịch sử có thể NULL — không muốn block pipeline |
 | Gold `is_air_quality_alert` nullable | NULL ≠ FALSE — phân biệt "không có data" với "không alert" |

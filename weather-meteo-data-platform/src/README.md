@@ -11,7 +11,7 @@ src/
 ├── main.py                          # Entrypoint — điều phối Extract & Load
 │
 ├── config/
-│   ├── config.json                  # Cấu hình 20 locations + API params
+│   ├── config.json                  # Cấu hình 52 locations + API params
 │   └── config_runtime_constant.json # timeout, max_retries, retry_delay
 │
 ├── extractors/
@@ -20,12 +20,11 @@ src/
 ├── loaders/
 │   ├── base_loader.py               # BasePostgresLoader (connect, close, retry)
 │   ├── postgres_loader.py           # UPSERT realtime data → Bronze
-│   └── csv_loader.py                # COPY + UPSERT historical CSV → Bronze
 │
 ├── scripts/
 │   ├── init_dbs.sh                  # Khởi tạo DB, tables, UNIQUE constraints
-│   ├── load_historical_csvs.py      # Nạp CSV Hà Nội → bronze_historical_weather
-│   └── backfill_history.py      # Backfill HCM từ Archive API (argparse)
+│   ├── alert_job.py                 # Truy vấn cảnh báo thời tiết và gửi Telegram
+│   └── backfill_history.py      # Backfill lịch sử từ Archive API (argparse)
 │
 └── utils/
     ├── config_manager.py            # ConfigManager Singleton
@@ -40,12 +39,12 @@ Nhận `--execution_date` từ Airflow BashOperator (Jinja template `{{ logical_
 
 ```bash
 # Giả lập chạy cron job của ngày hôm nay (Execution Date)
-python src/main.py --execution_date "2026-05-24T04:00:00+00:00"
+python src/main.py --execution_date "2026-05-27T04:00:00+00:00"
 ```
 
 **Luồng xử lý:**
-1. Load config → build batch params (20 lats, 20 lons joined bằng dấu phẩy)
-2. Extract Weather API → `_inject_location_metadata()` → nearest-neighbor match
+1. Load config → build batch params (52 lats, 52 lons joined bằng dấu phẩy)
+2. Extract Weather API → `_inject_location_metadata()` → Strict Index Matching (zip)
 3. Extract AQ API → `_inject_location_metadata()`
 4. UPSERT cả 2 vào `api_openmeteo_raw_data` (Bronze)
 
@@ -74,10 +73,6 @@ python src/main.py --execution_date "2026-05-24T04:00:00+00:00"
 - Tên bảng dùng `psycopg2.sql.Identifier` → tránh SQL Injection
 - Serialize `raw_json` với `json.dumps()` → lưu nguyên vẹn JSONB
 
-### csv_loader.py
-- **COPY** từ CSV → TEMP TABLE (nhanh hơn INSERT thông thường 10-20×)
-- UPSERT từ TEMP TABLE → `bronze_historical_weather`
-- Tự động thêm UNIQUE constraint nếu chưa có (idempotent)
 
 ---
 
@@ -90,15 +85,15 @@ Chạy tự động khi Postgres container khởi tạo lần đầu. Tạo:
 
 ### backfill_history.py
 ```bash
-# Backfill HCM toàn bộ (không có CSV, từ 2022 đến nay)
-python3 backfill_history.py \
-    --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-24
-
-# Gap-fill Hà Nội (sau khi CSV kết thúc ở 2025-11-29)
+# Backfill Hà Nội toàn bộ (30 Quận/Huyện từ 2022 đến nay)
 python3 backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-24
+    --start-date 2022-08-02 --end-date <YYYY-MM-DD>
+
+# Backfill TP.HCM toàn bộ (22 Quận/Huyện từ 2022 đến nay)
+python3 backfill_history.py \
+    --location-prefix HCM \
+    --start-date 2022-08-02 --end-date <YYYY-MM-DD>
 ```
 - `--location-prefix` là **bắt buộc** (`HCM` hoặc `HN`)
 - Filter locations có prefix tương ứng từ `config.json`
@@ -107,44 +102,3 @@ python3 backfill_history.py \
 - Validate date format và thứ tự (start ≤ end) trước khi kết nối DB
 - UPSERT vào `bronze_historical_weather`
 
-### load_historical_csvs.py
-- Tự động detect đường dẫn CSV theo 3 mức ưu tiên:
-  1. `$CSV_DATA_DIR/filename` (env var, dùng cho Docker volume mount)
-  2. `src/data/filename` (trong project — khuyến nghị cho production)
-  3. `../Open-Meteo-Dataset/filename` (host path, chỉ dùng khi dev)
-- `hanoi_aq_weather_MERGED.csv` là **bắt buộc** — script fail nếu không tìm thấy
-- `hanoi_realtime_data_updated.csv` là **optional** — bỏ qua nếu không có
-
----
-
-## Dữ Liệu Thu Thập
-
-### Thời Tiết (`weather_forecast_hourly`)
-| Biến | Đơn Vị | Mô Tả |
-|---|---|---|
-| `temperature_2m` | °C | Nhiệt độ tại 2m |
-| `relative_humidity_2m` | % | Độ ẩm |
-| `dew_point_2m` | °C | Điểm sương |
-| `apparent_temperature` | °C | Nhiệt độ cảm nhận |
-| `precipitation_probability` | % | Xác suất có mưa |
-| `precipitation` | mm | Lượng mưa |
-| `pressure_msl` | hPa | Áp suất khí quyển |
-| `cloud_cover` | % | Độ phủ mây |
-| `visibility` | m | Tầm nhìn |
-| `wind_speed_10m` | km/h | Tốc độ gió |
-| `wind_direction_10m` | ° | Hướng gió |
-| `wind_gusts_10m` | km/h | Gió giật |
-| `uv_index` | — | Chỉ số UV |
-
-### Chất Lượng Không Khí (`air_quality_hourly`)
-| Biến | Đơn Vị | Mô Tả |
-|---|---|---|
-| `pm10` | µg/m³ | Bụi mịn PM10 |
-| `pm2_5` | µg/m³ | Bụi siêu mịn PM2.5 |
-| `carbon_monoxide` | µg/m³ | CO |
-| `nitrogen_dioxide` | µg/m³ | NO₂ |
-| `sulphur_dioxide` | µg/m³ | SO₂ |
-| `ozone` | µg/m³ | Ozone tầng mặt đất |
-| `aerosol_optical_depth` | — | Độ đục quang học |
-| `dust` | µg/m³ | Bụi thô |
-| `uv_index` | — | Chỉ số UV |

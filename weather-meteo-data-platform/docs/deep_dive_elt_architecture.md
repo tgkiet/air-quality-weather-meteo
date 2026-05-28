@@ -65,7 +65,7 @@ Cách thực hiện: `ON CONFLICT (source_type, execution_date) DO UPDATE SET ra
 | Bảng | Nguồn | Constraint |
 |---|---|---|
 | `api_openmeteo_raw_data` | Airflow realtime (JSONB) | UNIQUE(source_type, execution_date) |
-| `bronze_historical_weather` | CSV Hà Nội + API Backfill | UNIQUE(datetime, lat, lon) |
+| `bronze_historical_weather` | Archive API Backfill | UNIQUE(datetime, lat, lon) |
 
 ### Tầng Silver — "Nhà Máy Chế Biến"
 
@@ -94,7 +94,7 @@ SELECT DISTINCT ON (forecast_time, latitude, longitude)
 FROM (
     SELECT * FROM stg_weather_hourly      -- Airflow realtime
     UNION ALL
-    SELECT * FROM stg_historical_weather  -- Backfill/CSV
+    SELECT * FROM stg_historical_weather  -- Backfill
 )
 ORDER BY forecast_time, latitude, longitude, execution_date DESC
 ```
@@ -147,7 +147,7 @@ Dùng **Orchestrator-Driven Pattern** (truyền tham số `execution_date` từ 
 
 **Tại sao JOIN trên `(forecast_time, lat, lon)` mà không có `location_name`?**
 
-- Dữ liệu lịch sử Hà Nội từ CSV không có cột `location_name` (CSV cũ không có trường này).
+- Dữ liệu được trích xuất hoàn toàn từ API nên luôn có `location_name`.
 - Nếu thêm `location_name` vào điều kiện JOIN: `NULL = NULL` trong SQL trả về `UNKNOWN` (không phải TRUE) → toàn bộ data lịch sử HN bị drop khỏi Gold.
 - Giải pháp: Chỉ JOIN trên 3 cột số học. Vì Silver đã đảm bảo `(time, lat, lon)` là UNIQUE, phép JOIN này luôn là 1:1, không có Cartesian Fanout.
 
@@ -180,7 +180,7 @@ khác hoàn toàn với FALSE nghĩa "Không có alert". Dashboard phải hiển
 ```
 BasePostgresLoader
     ├── PostgresLoader   (UPSERT JSONB realtime)
-    └── CSVLoader        (COPY EXPERT + UPSERT CSV)
+
     └── HistoricalBackfiller (Archive API + UPSERT)
 
 OpenMeteoExtractor       (HTTP Session + Retry + Data Contract)
@@ -197,37 +197,39 @@ Mỗi class chỉ biết đúng phạm vi trách nhiệm của mình. Đây là 
 **Tách biệt Config và Code:**
 
 ```
-config.json  ← 20 locations, API URLs, timeout, retry params
+config.json  ← 52 locations (30 HN + 22 HCM), API URLs, timeout, retry params
 .env         ← DB password, Airflow password (không bao giờ commit Git)
 .py files    ← Logic thuần túy, không có số ma thuật (magic number)
 ```
 
 ### COPY EXPERT — Tại Sao Không Dùng INSERT Thông Thường?
 
-`INSERT INTO ... VALUES (...)` xử lý từng dòng một → 900,000 dòng CSV cần 900,000 round-trips DB.
-`COPY EXPERT` stream toàn bộ file CSV qua binary protocol của PostgreSQL → nhanh hơn 10-50x.
+
+
 
 Flow thực tế:
 1. Tạo TEMP TABLE (không có constraint, không có index → tốc độ COPY tối đa).
-2. COPY toàn bộ CSV vào TEMP TABLE.
+
 3. UPSERT từ TEMP TABLE → bảng chính (có constraint xử lý trùng lặp).
 4. TEMP TABLE tự động bị xóa khi transaction kết thúc (`ON COMMIT DROP`).
 
-### Nearest-Neighbor Matching — Giải Quyết Grid Snapping
+### Strict Index Matching — Giải Quyết Xung Đột Grid Snapping
 
-Open-Meteo API không nhận tọa độ chính xác — nó snap về grid cell gần nhất (~1km resolution).
-Khi gửi batch 20 tọa độ, API trả về có thể ít hơn 20 items (các tọa độ gần nhau bị merge).
+Open-Meteo API không nhận tọa độ chính xác — nó snap về grid cell gần nhất (~10km resolution).
+Khi gửi batch 52 tọa độ, nếu 2 Quận nằm quá sát nhau (VD: Quận 1 và Quận 3), API sẽ snap cả 2 về CÙNG 1 tọa độ Grid. 
 
-`_inject_location_metadata()` trong `main.py` giải quyết vấn đề này:
+Nếu dùng thuật toán đo khoảng cách (Euclidean Nearest-Neighbor), cả 2 kết quả trả về sẽ bị gán nhầm cho cùng 1 Quận (Quận nào có khoảng cách gần hơn sẽ "cướp" luôn kết quả của Quận kia). Kết quả là Quận 1 bị duplicate 2 dòng, còn Quận 3 thì mất tích hoàn toàn dữ liệu!
+
+Để giải quyết triệt để, `_inject_location_metadata()` trong `main.py` khai thác đặc điểm của Open-Meteo: **Thứ tự mảng trả về luôn khớp tuyệt đối 100% với thứ tự tọa độ gửi lên.**
 ```python
-# Với mỗi API response item (lat_api, lon_api):
-# Tìm config location gần nhất trong bán kính 0.15°
-dist = sqrt((lat_config - lat_api)^2 + (lon_config - lon_api)^2)
-# Gán location_name của config location gần nhất
+# Chấp nhận việc API snap tọa độ, ta chỉ cần gộp (zip) đúng vị trí Index:
+for item, loc in zip(items, locations):
+    item["requested_latitude"]  = loc["latitude"]
+    item["requested_longitude"] = loc["longitude"]
+    item["location_name"]       = loc["name"]
 ```
 
-Kết quả: Mỗi API response item đều được gán đúng tên địa điểm từ config,
-dù tọa độ thực tế của response có lệch so với tọa độ trong config.
+Kết quả: Mỗi API response item đều được gán chính xác Tên Địa Điểm của nó mà không bị "đánh cắp" dữ liệu bởi các Quận lân cận.
 
 ---
 
@@ -319,7 +321,7 @@ dbt test chạy sau dbt run. Nếu bất kỳ test nào FAIL → Airflow task FA
 | `not_null` | Cột không được có giá trị NULL | Bronze, Silver, Gold |
 | `unique` | Không có 2 dòng cùng giá trị | Bronze id, Silver (time,lat,lon) |
 | `accepted_values` | Giá trị chỉ được nằm trong danh sách cho phép | Gold: temperature_level, uv_level, pm2_5_level |
-| `not_null severity:warn` | NULL được phép nhưng cần cảnh báo | Silver/Gold: location_name (NULL với CSV HN cũ) |
+
 
 ---
 

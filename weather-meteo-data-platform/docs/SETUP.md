@@ -74,19 +74,22 @@ File `src/config/config.json` là **nguồn sự thật duy nhất** cho tất c
 
 ```json
 {
+  "locations": [
+    {
+      "name": "HCM Quận 1",
+      "latitude": 10.775394,
+      "longitude": 106.699625
+    }
+  ],
   "api": {
     "open_meteo": {
       "weather_url": "https://api.open-meteo.com/v1/forecast",
       "weather_params": {
-        "latitude": 10.7756,
-        "longitude": 106.7019,
         "hourly": "temperature_2m,relative_humidity_2m,...",
         "timezone": "Asia/Bangkok"
       },
       "aq_url": "https://air-quality-api.open-meteo.com/v1/air-quality",
       "aq_params": {
-        "latitude": 10.7756,
-        "longitude": 106.7019,
         "hourly": "pm10,pm2_5,carbon_monoxide,...",
         "timezone": "Asia/Bangkok"
       }
@@ -95,7 +98,7 @@ File `src/config/config.json` là **nguồn sự thật duy nhất** cho tất c
 }
 ```
 
-**Thay đổi vị trí địa lý:** Sửa `latitude` và `longitude`.  
+**Thêm/Sửa vị trí địa lý:** Thêm mới dict vào trong mảng `locations`. Script sẽ tự động lấy dữ liệu cho toàn bộ danh sách (hỗ trợ tối đa lên đến hàng ngàn vùng).
 **Thêm biến dữ liệu:** Thêm tên biến vào chuỗi `hourly`. Tham khảo [Open-Meteo Docs](https://open-meteo.com/en/docs).
 
 ---
@@ -158,5 +161,6 @@ Dùng để debug hoặc test nhanh:
 
 ```bash
 # Đảm bảo POSTGRES_HOST=localhost trong .env trước khi chạy
-python src/main.py
+# --execution_date là tham số bắt buộc (ISO 8601), dùng để giữ tính Idempotency
+python src/main.py --execution_date "$(date -u +%Y-%m-%dT%H:00:00+00:00)"
 ```

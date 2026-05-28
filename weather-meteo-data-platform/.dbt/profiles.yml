@@ -9,4 +9,4 @@ weather_meteo_transform:
       user: "{{ env_var('POSTGRES_USER') }}"
       password: "{{ env_var('POSTGRES_PASSWORD') }}"
       dbname: "{{ env_var('POSTGRES_DB') }}"
-      schema: silver_layer # Dữ liệu dbt sinh ra sẽ nằm ở schema này, tách biệt với bảng raw ở schema public
+      schema: "{{ env_var('DBT_TARGET_SCHEMA', 'silver_layer') }}" # Có thể ghi đè thành prod_silver_layer bằng biến môi trường

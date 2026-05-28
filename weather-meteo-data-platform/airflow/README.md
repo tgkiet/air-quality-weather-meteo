@@ -9,7 +9,7 @@
 ```
 airflow/
 ├── dags/
-│   └── orchestrator.py      # DAG duy nhất — 3 tasks nối tiếp
+│   └── orchestrator.py      # DAG duy nhất — 4 tasks nối tiếp
 └── logs/                    # Airflow tự ghi log task
 ```
 
@@ -35,16 +35,16 @@ airflow/
 ### Task Flow
 
 ```
-[fetch_data]  ──►  [dbt_run]  ──►  [dbt_test]
-  BashOperator     BashOperator     BashOperator
-  Extract+Load     Transform        Quality Gate
+[fetch_data]  ──►  [dbt_run]  ──►  [dbt_test]  ──►  [send_alert]
+  BashOperator     BashOperator     BashOperator     BashOperator
+  Extract+Load     Transform        Quality Gate     Telegram Alert
 ```
 
 **Task 1 — `fetch_data`:**
 ```bash
 python3 /opt/airflow/src/main.py --execution_date "{{ logical_date | ts }}"
 ```
-- Gọi Open-Meteo Batch API (20 locations/call)
+- Gọi Open-Meteo Batch API (52 locations/call)
 - UPSERT vào Bronze: `api_openmeteo_raw_data`
 
 **Task 2 — `dbt_run`:**
@@ -63,6 +63,14 @@ dbt test --project-dir /opt/airflow/dbt-transform \
 ```
 - 29 data quality tests
 - Pipeline FAIL nếu bất kỳ test nào fail → không publish dữ liệu xấu
+
+**Task 4 — `send_alert`:**
+```bash
+python3 /opt/airflow/src/scripts/alert_job.py
+```
+- Gửi thông báo Telegram khi phát hiện nguy cơ mưa lớn (Xác suất >= 80% & Lượng mưa > 2.0mm) trong vòng 48h tới.
+- Phụ thuộc vào `dbt_test`: Chỉ gửi cảnh báo nếu dữ liệu qua được kiểm định.
+- Stateful Deduplication: Dùng `silver_layer.alert_history` để ghi nhớ, đảm bảo mỗi sự kiện chỉ được cảnh báo đúng 1 lần.
 
 ---
 

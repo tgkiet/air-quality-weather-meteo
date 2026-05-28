@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS api_openmeteo_raw_data (
 ALTER TABLE api_openmeteo_raw_data
 ADD CONSTRAINT unique_source_execution_date UNIQUE (source_type, execution_date);
 
--- Bảng historical (CSV Hà Nội + Archive API backfill HCM & HN gap)
+-- Bảng historical (Archive API backfill cho toàn bộ 52 Quận/Huyện)
 CREATE TABLE IF NOT EXISTS bronze_historical_weather (
     id                    SERIAL PRIMARY KEY,
     datetime              TIMESTAMPTZ NOT NULL,
@@ -61,64 +61,20 @@ CREATE TABLE IF NOT EXISTS bronze_historical_weather (
     location_id           NUMERIC,
     lat                   NUMERIC,
     lon                   NUMERIC,
-    location_name         VARCHAR(255),  -- "HN Đống Đa" / "HCM Quận 1" / NULL (CSV cũ)
+    location_name         VARCHAR(255),  -- "HN Đống Đa" / "HCM Quận 1" — luôn có giá trị với dữ liệu API
     ingested_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
--- Mỏ neo Idempotency: load_historical_csvs.py và backfill_history.py dùng ON CONFLICT
+-- Mỏ neo Idempotency: backfill_history.py dùng ON CONFLICT
 ALTER TABLE bronze_historical_weather
 ADD CONSTRAINT unique_historical_datetime_lat_lon UNIQUE (datetime, lat, lon);
 ```
 
 ---
-
-## `load_historical_csvs.py` — Nạp CSV Hà Nội
-
-**Mục đích:** Nạp file CSV lịch sử cho các trạm Hà Nội (2022-08-02 → 2025-11-29) vào Bronze.
-
-### Cơ Chế Path Resolution (3 mức ưu tiên)
-
-Script tự động tìm file CSV theo thứ tự:
-
-```
-1. $CSV_DATA_DIR/filename          ← Env var (Docker volume — KHUYẾN NGHỊ)
-2. src/data/filename               ← Copy thủ công vào project
-3. ../Open-Meteo-Dataset/filename  ← Host path (development fallback)
-```
-
-**Trong Docker (cách đang dùng):**
-Docker Compose đã mount `../Open-Meteo-Dataset → /opt/airflow/csv-data` và set `CSV_DATA_DIR=/opt/airflow/csv-data` — script tự động tìm thấy ở mức 1.
-
-### Kỹ Thuật Tối Ưu: COPY → TEMP TABLE → UPSERT
-
-```
-CSV File (874k dòng, 118MB)
-    ↓ COPY EXPERT (stream, không load vào RAM)
-TEMP TABLE (không có index, không có constraint)
-    ↓ INSERT ... ON CONFLICT DO UPDATE (set-based, không loop)
-bronze_historical_weather
-```
-
-Nhanh hơn 10-20× so với INSERT từng dòng. ~900k rows trong ~3 giây.
-
-### Cách Chạy
-
-```bash
-docker exec airflow_container \
-    python3 /opt/airflow/src/scripts/load_historical_csvs.py
-```
-
-### Files CSV Cần Có
-
-| File | Coverage | Dòng | Bắt buộc? |
-|---|---|---|---|
-| `hanoi_aq_weather_MERGED.csv` | 2022-08-02 → 2025-10-19 | ~874,200 | **Bắt buộc** |
-| `hanoi_realtime_data_updated.csv` | 2025-10-20 → 2025-11-29 | ~30,256 | Optional |
-
 ---
 
 ## `backfill_history.py` — Backfill từ Archive API
 
-**Mục đích:** Nạp dữ liệu lịch sử Weather + Air Quality từ Open-Meteo Archive API. Hỗ trợ cả HCM (full) và HN (gap fill).
+**Mục đích:** Nạp dữ liệu lịch sử Weather + Air Quality từ Open-Meteo Archive API. Hỗ trợ nạp toàn bộ 52 Quận/Huyện (30 HN + 22 HCM).
 
 ### Tham Số
 
@@ -131,31 +87,31 @@ python3 backfill_history.py \
 
 ### Cách Dùng — 2 Trường Hợp
 
-**Trường hợp 1: Backfill HCM toàn bộ** (không có CSV)
+**Trường hợp 1: Backfill TP.HCM toàn bộ (22 Quận/Huyện)**
 ```bash
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-24
+    --start-date 2022-08-02 --end-date 2026-05-27
 ```
-~10 locations × ~3.8 năm → **10-15 phút**
+~22 locations × ~3.8 năm → **~5-10 phút**
 
-**Trường hợp 2: Backfill HN gap** (CSV đến 2025-11-29, cần fill tiếp)
+**Trường hợp 2: Backfill Hà Nội toàn bộ (30 Quận/Huyện/Thị xã)**
 ```bash
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-24
+    --start-date 2022-08-02 --end-date 2026-05-27
 ```
-~10 locations × ~6 tháng → **2-3 phút**
+~30 locations × ~3.8 năm → **~10-15 phút**
 
 ### Kỹ Thuật Quan Trọng
 
 | Fix | Mô Tả |
 |---|---|
-| **LOGIC-A** | Align AQ/Weather theo `time_str` dict key, không phải positional index → tránh gán PM2.5 sai giờ |
-| **BUG-1** | `safe_get()` guard IndexError khi API trả về array ngắn hơn time array |
-| **BUG-2** | `%s::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'` → timezone đúng khi insert vào TIMESTAMPTZ |
+| Feature | Align AQ/Weather theo `time_str` dict key, không phải positional index → tránh gán PM2.5 sai giờ |
+| Feature | `safe_get()` guard IndexError khi API trả về array ngắn hơn time array |
+| Feature | `%s::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'` → timezone đúng khi insert vào TIMESTAMPTZ |
 | **Retry** | Exponential backoff: 4xx không retry, 429/5xx retry tối đa 3 lần |
 | **Idempotent** | `ON CONFLICT (datetime, lat, lon) DO UPDATE` → chạy lại không duplicate |
 
@@ -163,9 +119,8 @@ docker exec airflow_container \
 
 | Prefix | ID Offset | Lý Do |
 |---|---|---|
-| HN (từ CSV) | Dùng `location_id` gốc từ CSV (ví dụ: 2539) | Giữ nguyên ID thực từ OpenAQ |
-| HCM backfill | 3000000 + idx | Tránh conflict với HN CSV IDs |
-| HN gap fill | 4000000 + idx | Tránh conflict với cả HN CSV và HCM |
+| HCM backfill | 3000000 + idx | Tránh conflict với HN backfill |
+| HN backfill | 4000000 + idx | Tránh conflict với HCM |
 
 ---
 
@@ -175,23 +130,19 @@ docker exec airflow_container \
 # 1. Khởi động hệ thống (init_dbs.sh chạy tự động)
 docker compose up -d --build
 
-# 2. Nạp CSV Hà Nội → bronze_historical_weather (~vài phút)
-docker exec airflow_container \
-    python3 /opt/airflow/src/scripts/load_historical_csvs.py
-
-# 3. Backfill HCM full (~10-15 phút)
-docker exec airflow_container \
-    python3 /opt/airflow/src/scripts/backfill_history.py \
-    --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-24
-
-# 4. Backfill HN gap (~2-3 phút)
+# 2. Backfill dữ liệu lịch sử cho toàn bộ Hà Nội (30 Quận/Huyện)
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-24
+    --start-date 2022-08-02 --end-date 2026-05-27
 
-# 5. Rebuild Silver + Gold với toàn bộ historical data
+# 3. Backfill dữ liệu lịch sử cho toàn bộ TP.HCM (22 Quận/Huyện)
+docker exec airflow_container \
+    python3 /opt/airflow/src/scripts/backfill_history.py \
+    --location-prefix HCM \
+    --start-date 2022-08-02 --end-date 2026-05-27
+
+# 4. Rebuild Silver + Gold với toàn bộ historical data
 docker exec airflow_container bash -c \
     "dbt run --full-refresh \
      --project-dir /opt/airflow/dbt-transform \

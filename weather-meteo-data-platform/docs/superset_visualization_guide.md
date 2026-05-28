@@ -38,7 +38,7 @@ Trong Superset, để vẽ được biểu đồ, bạn không thể truy vấn 
 ### Nguyên tắc 3.1: Chọn đúng Cột Thời Gian (Time Column)
 Hệ thống có 2 cột mang định dạng thời gian. Bạn **tuyệt đối phải chọn `forecast_time`** làm trục X (Time Column) cho mọi biểu đồ Time-series.
 *   ✅ **`forecast_time`**: Điểm thời gian thực tế mà thời tiết/không khí diễn ra (Quá khứ, Hiện tại, hoặc Tương lai).
-    > 💡 **Bí mật kỹ thuật:** Cột này đã được tự động ép về múi giờ Việt Nam (Naive Local Time) ngay từ tầng Data Warehouse để vô hiệu hóa lỗi lệch 7 tiếng của thư viện ECharts trên Superset. Bạn cứ yên tâm vẽ mà không lo bị lệch giờ!
+    > **Bí mật kỹ thuật:** Cột này đã được tự động ép về múi giờ Việt Nam (Naive Local Time) ngay từ tầng Data Warehouse để vô hiệu hóa lỗi lệch 7 tiếng của thư viện ECharts trên Superset. Bạn cứ yên tâm vẽ mà không lo bị lệch giờ!
 *   ❌ **`execution_date`**: Chỉ là metadata nội bộ, ghi nhận thời điểm con bot Airflow chạy lệnh kéo dữ liệu.
 
 ### Nguyên tắc 3.2: Luôn dùng Hàm `AVG` thay vì `SUM`
@@ -53,7 +53,8 @@ Thay vì bắt người xem tự phân tích các con số thô (ví dụ: PM2.5
 | :--- | :--- |
 | `pm2_5_level` | Chuyển đổi chỉ số bụi mịn thành Text ("Tốt", "Trung bình", "Kém", "Nguy hiểm") dựa trên chuẩn WHO. Rất hợp để vẽ Pie Chart tỷ lệ ô nhiễm. |
 | `temperature_level` | Đánh giá mức độ khắc nghiệt của thời tiết ("Mát mẻ", "Nóng", "Rất nóng", "Nguy hiểm"). |
-| `is_weather_alert` | Cờ Boolean (`True`/`False`). Bật `True` khi có mưa to, gió giật mạnh, hoặc không khí ô nhiễm nặng. Rất hợp dùng làm thẻ KPI đếm số giờ báo động. |
+| `is_weather_alert` | Cờ Boolean (`True`/`False`). Bật `True` khi **nắng nóng gay gắt (Nhiệt độ ≥ 38°C) hoặc Tia UV nguy hiểm (UV ≥ 8)**. Rất hợp dùng làm thẻ KPI đếm số giờ báo động thời tiết. |
+| `is_air_quality_alert` | Cờ Boolean (`True`/`False`). Bật `True` khi **không khí ô nhiễm nặng (PM2.5 ≥ 55 µg/m³)**. Hữu ích khi kết hợp với Time-series biểu đồ cảnh báo khói bụi. |
 
 ### Nguyên tắc 3.4: Đừng hoảng hốt với "Độ trễ Không khí" (AQ Lag)
 Khi bạn vẽ biểu đồ dự báo 7 ngày tương lai, bạn sẽ thấy cột Nhiệt độ/Mưa trải dài liền mạch cả tuần. Tuy nhiên, các cột chỉ số không khí (như `pm2_5`, `aqi`) sẽ hiển thị `NULL` ở ngày thứ 6 và thứ 7.

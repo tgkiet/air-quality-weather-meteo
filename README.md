@@ -1,6 +1,6 @@
-# ☁️ Vietnam Weather & Air Quality Data Platform ☁️
+# 🌤️ Vietnam Weather & Air Quality Data Platform 🍃
 
-> **Enterprise-grade Data Engineering pipeline** - tự động thu thập, chuẩn hóa và phân tích dữ liệu **thời tiết & chất lượng không khí** cho **20 khu vực quan trắc** trên 2 thành phố: **10 grid cells Hà Nội** và **10 grid cells TP.HCM**, cập nhật mỗi giờ, lịch sử từ năm 2022.
+> **Enterprise-grade Data Engineering pipeline** - tự động thu thập, chuẩn hóa và phân tích dữ liệu **thời tiết & chất lượng không khí** cho **52 khu vực quan trắc** trên 2 thành phố: **30 Quận/Huyện Hà Nội** và **22 Quận/Huyện TP.HCM**, cập nhật mỗi giờ, lịch sử từ năm 2022.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.13-blue?logo=python" />
@@ -12,15 +12,13 @@
 
 ---
 
-## Giới Thiệu
-Dự án này trước kia chỉ đơn giản là CALL API và dùng SCRIPT để DOWNLOAD DATA về với dạng CSV từ API Open-Meteo cho toạ độ của 31 toạ độ ở Hà Nội.
+## 🌟 Giới Thiệu
+Dự án này là một **Data Platform hoàn chỉnh (End-to-End)**, sử dụng Modern Data Stack để xây dựng luồng xử lý dữ liệu chuẩn mức Enterprise. Nền tảng được tối ưu hóa để thu thập, xử lý và lưu trữ dữ liệu thời tiết và chất lượng không khí với độ bao phủ cao.
 
-Sau đó thực hiện update && upgrade lên DATA PIPELINE hoàn chỉnh, dùng các modern data stack, đồng thời cũng là một DATA PIPELINE END TO END tâm huyết của tôi để đưa vào CV. Luồng xử lý dữ liệu cho 1 toạ độ là TPHCM
-
-NHƯNG, sau khi backfill dữ liệu lịch sử từ file csv tôi mới nhận ra thật chất 31 location Hà Nội đó được api open-meteo gộp grid cell, nên vì thế tôi quyết định nâng cấp cả project này thành một **Data Platform hoàn chỉnh** với:
+Hệ thống cung cấp giải pháp toàn diện với:
   - **Medallion Architecture** (Bronze → Silver → Gold)
   - **Idempotency** đầy đủ tại mọi tầng (UPSERT everywhere)
-  - **20 grid cells** (10 HN + 10 HCM) sau khi prune config khỏp với API grid resolution
+  - **52 Vùng quan trắc (30 Quận/Huyện HN + 22 Quận/Huyện HCM)** lấy trực tiếp 100% từ API, dữ liệu hoàn toàn độc lập và chính xác về mặt địa lý.
   - **29 Data Quality Tests** tự động qua dbt
   - **Dockerized** hoàn toàn với healthcheck và RBAC-ready schema
 ---
@@ -30,10 +28,10 @@ NHƯNG, sau khi backfill dữ liệu lịch sử từ file csv tôi mới nhận
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     DATA SOURCES                            │
-│  Open-Meteo Forecast API    Open-Meteo Archive API   CSV   │
-│  (20 locations/batch)       (HCM backfill)       (Hà Nội) │
-└──────────────┬──────────────────────┬───────────────┬───────┘
-               ▼                      ▼               ▼
+│  Open-Meteo Forecast API    Open-Meteo Archive API         │
+│  (52 locations/batch)       (Full History Backfill)        │
+└──────────────┬──────────────────────┬──────────────────────┘
+               ▼                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   BRONZE LAYER (Raw)                      │
 │  api_openmeteo_raw_data          bronze_historical_weather  │
@@ -63,12 +61,12 @@ NHƯNG, sau khi backfill dữ liệu lịch sử từ file csv tôi mới nhận
 
 | | Hà Nội | TP.HCM |
 |---|---|---|
-| **Locations** | 10 grid cells |	10 grid cells |
-| **Lịch sử** | 2022-08-02 → 2026-05-24 (CSV + API gap) | 2022-08-02 → 2026-05-24 (Archive API) |
+| **Locations** | 30 Quận/Huyện | 22 Quận/Huyện |
+| **Lịch sử** | 2022-08-02 → Hiện tại (Archive API) | 2022-08-02 → 2026-05-27 (Archive API) |
 | **Realtime** | Dự báo 7 ngày tới (cập nhật mỗi giờ) | Dự báo 7 ngày tới (cập nhật mỗi giờ) |
-| **Nguồn** | OpenAQ CSV (2022→11/2025) + Open-Meteo Archive | Open-Meteo Forecast + Archive API |
+| **Nguồn** | Open-Meteo Archive API (100% API-driven) | Open-Meteo Forecast + Archive API |
 
->  Config ban đầu có 53 locations (31 HN + 22 HCM). Sau khi kiểm tra thực tế, Open-Meteo API chỉ trả về 20 grid cells độc lập (các quận nội thành gần nhau bị merge). Config đã được prune xuống **20 locations** để tránh duplicate và lãng phí API calls.
+>  **Kiến trúc API-Driven:** Hệ thống lấy dữ liệu trực tiếp từ Open-Meteo Archive API cho toàn bộ 52 Quận/Huyện chuẩn hành chính của 2 thành phố, đảm bảo dữ liệu đồng nhất từ 2022 đến nay.
 
 ---
 
@@ -81,9 +79,6 @@ air-quality-weather-meteo/
 ├──  requirements.txt                 ← Dependencies Python local dev
 ├──  .gitignore
 │
-├──  Open-Meteo-Dataset/              ← Raw CSV lịch sử Hà Nội 2022-2025
-│   └── hanoi_aq_weather_MERGED.csv     ← (gitignore — liên hệ để nhận file)
-│
 └──  weather-meteo-data-platform/     ← Core Platform (toàn bộ hệ thống)
     ├──  README.md                    ← Platform overview & Quick Start
     ├──  docker-compose.yml           ← Infra: Postgres + Airflow
@@ -92,16 +87,16 @@ air-quality-weather-meteo/
     │
     ├──  src/                         ← Extract & Load Layer
     │   ├──  README.md
-    │   ├── config/config.json          ← 20 locations + API config
+    │   ├── config/config.json          ← 52 locations + API config
     │   ├── extractors/open_meteo.py    ← Session + Retry + Data Contract
-    │   ├── loaders/                    ← PostgresLoader + CSVLoader
-    │   ├── scripts/                    ← init_dbs.sh, backfill, CSV load
+    │   ├── loaders/                    ← PostgresLoader
+    │   ├── scripts/                    ← init_dbs.sh, backfill_history.py, alert_job.py
     │   ├── utils/                      ← Logger + ConfigManager
     │   └── main.py                     ← ELT entrypoint
     │
     ├──  airflow/                     ← Orchestration Layer
     │   ├──  README.md
-    │   └── dags/orchestrator.py        ← DAG @hourly, 3 tasks
+    │   └── dags/orchestrator.py        ← DAG @hourly, 4 tasks
     │
     └──  dbt-transform/               ← Transform Layer
         ├──  README.md
@@ -131,33 +126,27 @@ docker compose up -d --build
 open http://localhost:8080
 
 
-# Nạp dữ liệu lịch sử (chạy 1 lần, theo thứ tự sau)
+# Nạp dữ liệu lịch sử hoàn chỉnh bằng API (100% API-Driven, không dùng CSV)
+# Archive API hỗ trợ kéo dữ liệu từ 2022 đến hiện tại (tự động ghép ERA5 + IFS)
 
-# Bước 1: Nạp 2 file CSV Hà Nội (2022-08-02 → 2025-11-29 · ~900k dòng · nhanh)
-# CSV được tự động tìm tại /opt/airflow/csv-data/ (Docker volume mount từ Open-Meteo-Dataset/)
-docker exec airflow_container \
-    python3 /opt/airflow/src/scripts/load_historical_csvs.py
-
-# Bước 2: Backfill HCM toàn bộ từ Archive API (10 grid cells × ~3.8 năm · ~30-60 phút)
-# Archive API hỗ trợ đến ngày hiện tại (dữ liệu gần nhất tự động ghep ERA5 + IFS)
-docker exec airflow_container \
-    python3 /opt/airflow/src/scripts/backfill_history.py \
-    --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-24
-
-# Bước 3: Backfill HN gap (10 grid cells × ~6 tháng · ~5-10 phút)
-# CSV chỉ đến 2025-11-29 → cần kéo thêm phần còn thiếu
+# Backfill toàn bộ 30 Quận/Huyện Hà Nội
 docker exec airflow_container \
     python3 /opt/airflow/src/scripts/backfill_history.py \
     --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-24
+    --start-date 2022-08-02 --end-date 2026-05-27
+
+# Backfill toàn bộ 22 Quận/Huyện TP.HCM
+docker exec airflow_container \
+    python3 /opt/airflow/src/scripts/backfill_history.py \
+    --location-prefix HCM \
+    --start-date 2022-08-02 --end-date 2026-05-27
 ```
 
-> ⚠️ **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`
+>  **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`
 
 ---
 
-## Tài Liệu Chi Tiết
+## 📚 Tài Liệu Chi Tiết
 
 | Tài Liệu | Nội Dung |
 |---|---|
@@ -173,8 +162,8 @@ docker exec airflow_container \
 | Nguyên Tắc | Giải Pháp |
 |---|---|
 | **Idempotency** | UPSERT + `execution_date` từ Airflow `logical_date` |
-| **Nearest-neighbor matching** | Map API response → config location theo toạ độ (tolerance 0.15°) |
-| **API Grid Resolution** | Open-Meteo merge nearby coords — tập trung thành 20 grid cells thực tế |
+| **Strict index matching** | Map API response → config location theo index, chống lỗi Grid Snapping |
+| **52 Vùng quan trắc** | Tọa độ chuẩn hành chính từ Nominatim (OpenStreetMap), độc lập về mặt không gian |
 | **Time alignment** | AQ/Weather ghép theo `time_str` dict key, không theo array index |
 | **UNION ALL safety** | Explicit column list (đúng thứ tự) ở cả hai bên |
 | **NULL safety** | `IS NULL` guard tường minh trước mọi CASE comparison |
@@ -186,4 +175,3 @@ docker exec airflow_container \
 ## Liên Hệ
 
 - **Email:** giakiet.work@gmail.com
-- **Dataset:** Dữ liệu CSV gitignore do dung lượng lớn - liên hệ để nhận file data

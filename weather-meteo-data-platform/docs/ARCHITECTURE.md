@@ -25,7 +25,8 @@ Hệ thống áp dụng mô hình **ELT** (Extract → Load → Transform), tác
 │  LOAD LAYER     (src/loaders/)      │
 │  PostgresLoader                     │
 │  - INSERT INTO api_openmeteo_raw_data│
-│  - Append-only, không xóa/update   │
+│  - UPSERT (ON CONFLICT DO UPDATE)   │
+│  - Idempotent: chạy lại không dup  │
 │  - Bảo vệ SQL Injection (Identifier)│
 └──────────────┬──────────────────────┘
                │ raw JSONB trong Postgres
@@ -75,7 +76,7 @@ Models dbt trong `models/staging/`:
 - **`stg_air_quality_hourly`**: Bóc tách JSON chất lượng không khí, 1 row = 1 giờ đo
 
 Các phép biến đổi áp dụng:
-1. **Deduplication** bằng `ROW_NUMBER()` — loại bỏ bản ghi trùng do pipeline chạy lại
+1. **Deduplication** bằng `DISTINCT ON (forecast_time, lat, lon) ... ORDER BY execution_date DESC` — lấy bản ghi mới nhất khi có trùng lặp khóa chính
 2. **JSON Parsing** — trải JSONB ra thành cột độc lập bằng toán tử `->>`
 3. **Type Casting** — `TEXT` → `FLOAT`, `TEXT` → `TIMESTAMPTZ`
 4. **Renaming** — đổi tên cột theo convention `snake_case`
@@ -84,7 +85,7 @@ Các phép biến đổi áp dụng:
 
 Models dbt trong `models/marts/`:
 
-- **`mart_hourly_meteo_report`**: JOIN bảng thời tiết + chất lượng không khí theo `observed_at`, sẵn sàng cho BI Dashboard.
+- **`mart_hourly_conditions`**: JOIN bảng thời tiết + chất lượng không khí theo `forecast_time` và `(latitude, longitude)`, sẵn sàng cho BI Dashboard.
 
 ---
 
@@ -191,6 +192,7 @@ Models dbt trong `models/marts/`:
 | `precipitation_probability` | % | Xác suất có mưa |
 | `precipitation` | mm | Lượng mưa |
 | `pressure_msl` | hPa | Áp suất khí quyển |
+| `surface_pressure` | hPa | Áp suất bề mặt |
 | `cloud_cover` | % | Độ phủ mây |
 | `visibility` | m | Tầm nhìn |
 | `wind_speed_10m` | km/h | Tốc độ gió |

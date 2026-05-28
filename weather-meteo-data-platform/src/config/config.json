@@ -1,121 +1,281 @@
 {
-  "locations": [
-    {
-      "name": "HN Cầu Giấy",
-      "latitude": 21.0478,
-      "longitude": 105.8
-    },
-    {
-      "name": "HN Nam Từ Liêm Tây",
-      "latitude": 21.0024,
-      "longitude": 105.7181
-    },
-    {
-      "name": "HN Chương Mỹ",
-      "latitude": 20.92,
-      "longitude": 105.7123
-    },
-    {
-      "name": "HN Bắc Từ Liêm Tây",
-      "latitude": 21.05,
-      "longitude": 105.74
-    },
-    {
-      "name": "HN Hoàng Mai Nam",
-      "latitude": 20.9481,
-      "longitude": 105.8493
-    },
-    {
-      "name": "HN Hoàng Mai",
-      "latitude": 20.9883,
-      "longitude": 105.8549
-    },
-    {
-      "name": "HN Đông Anh",
-      "latitude": 21.1476,
-      "longitude": 105.9159
-    },
-    {
-      "name": "HN Hà Đông Đông",
-      "latitude": 20.972,
-      "longitude": 105.7856
-    },
-    {
-      "name": "HN Bắc Từ Liêm",
-      "latitude": 21.1105,
-      "longitude": 105.7605
-    },
-    {
-      "name": "HN Long Biên",
-      "latitude": 21.0491,
-      "longitude": 105.8831
-    },
-    {
-      "name": "HCM Quận 1",
-      "latitude": 10.7754,
-      "longitude": 106.6996
-    },
-    {
-      "name": "HCM Quận 7",
-      "latitude": 10.7378,
-      "longitude": 106.7297
-    },
-    {
-      "name": "HCM Quận 8",
-      "latitude": 10.7211,
-      "longitude": 106.6292
-    },
-    {
-      "name": "HCM Quận 12",
-      "latitude": 10.8613,
-      "longitude": 106.6642
-    },
-    {
-      "name": "HCM Quận Tân Phú",
-      "latitude": 10.7919,
-      "longitude": 106.6278
-    },
-    {
-      "name": "HCM Thành phố Thủ Đức",
-      "latitude": 10.851,
-      "longitude": 106.7549
-    },
-    {
-      "name": "HCM Huyện Cần Giờ",
-      "latitude": 10.3966,
-      "longitude": 106.9087
-    },
-    {
-      "name": "HCM Huyện Củ Chi",
-      "latitude": 11.0967,
-      "longitude": 106.5097
-    },
-    {
-      "name": "HCM Huyện Hóc Môn",
-      "latitude": 10.8777,
-      "longitude": 106.5761
-    },
-    {
-      "name": "HCM Huyện Nhà Bè",
-      "latitude": 10.651,
-      "longitude": 106.7259
+    "locations": [
+        {
+            "name": "HCM Quận 1",
+            "latitude": 10.775394,
+            "longitude": 106.699625
+        },
+        {
+            "name": "HCM Quận 3",
+            "latitude": 10.778891,
+            "longitude": 106.686997
+        },
+        {
+            "name": "HCM Quận 4",
+            "latitude": 10.760754,
+            "longitude": 106.70708
+        },
+        {
+            "name": "HCM Quận 5",
+            "latitude": 10.755825,
+            "longitude": 106.668284
+        },
+        {
+            "name": "HCM Quận 6",
+            "latitude": 10.74589,
+            "longitude": 106.639199
+        },
+        {
+            "name": "HCM Quận 7",
+            "latitude": 10.73785,
+            "longitude": 106.729695
+        },
+        {
+            "name": "HCM Quận 8",
+            "latitude": 10.721116,
+            "longitude": 106.629208
+        },
+        {
+            "name": "HCM Quận 10",
+            "latitude": 10.772528,
+            "longitude": 106.668202
+        },
+        {
+            "name": "HCM Quận 11",
+            "latitude": 10.765634,
+            "longitude": 106.647607
+        },
+        {
+            "name": "HCM Quận 12",
+            "latitude": 10.861265,
+            "longitude": 106.664208
+        },
+        {
+            "name": "HCM Quận Tân Bình",
+            "latitude": 10.80307,
+            "longitude": 106.652225
+        },
+        {
+            "name": "HCM Quận Bình Tân",
+            "latitude": 10.770354,
+            "longitude": 106.599576
+        },
+        {
+            "name": "HCM Quận Bình Thạnh",
+            "latitude": 10.812271,
+            "longitude": 106.704039
+        },
+        {
+            "name": "HCM Quận Tân Phú",
+            "latitude": 10.791868,
+            "longitude": 106.627752
+        },
+        {
+            "name": "HCM Quận Gò Vấp",
+            "latitude": 10.835354,
+            "longitude": 106.674034
+        },
+        {
+            "name": "HCM Quận Phú Nhuận",
+            "latitude": 10.801006,
+            "longitude": 106.679764
+        },
+        {
+            "name": "HCM Thành phố Thủ Đức",
+            "latitude": 10.851024,
+            "longitude": 106.754895
+        },
+        {
+            "name": "HCM Huyện Bình Chánh",
+            "latitude": 10.695083,
+            "longitude": 106.59093
+        },
+        {
+            "name": "HCM Huyện Hóc Môn",
+            "latitude": 10.877733,
+            "longitude": 106.576052
+        },
+        {
+            "name": "HCM Huyện Củ Chi",
+            "latitude": 11.096707,
+            "longitude": 106.509746
+        },
+        {
+            "name": "HCM Huyện Nhà Bè",
+            "latitude": 10.651001,
+            "longitude": 106.725864
+        },
+        {
+            "name": "HCM Huyện Cần Giờ",
+            "latitude": 10.396588,
+            "longitude": 106.908698
+        },
+        {
+            "name": "HN Quận Ba Đình",
+            "latitude": 21.034709,
+            "longitude": 105.824519
+        },
+        {
+            "name": "HN Quận Bắc Từ Liêm",
+            "latitude": 21.073012,
+            "longitude": 105.761396
+        },
+        {
+            "name": "HN Quận Cầu Giấy",
+            "latitude": 21.029846,
+            "longitude": 105.791327
+        },
+        {
+            "name": "HN Quận Đống Đa",
+            "latitude": 21.01451,
+            "longitude": 105.823409
+        },
+        {
+            "name": "HN Quận Hà Đông",
+            "latitude": 20.954071,
+            "longitude": 105.760086
+        },
+        {
+            "name": "HN Quận Hai Bà Trưng",
+            "latitude": 21.005453,
+            "longitude": 105.860623
+        },
+        {
+            "name": "HN Quận Hoàn Kiếm",
+            "latitude": 21.030782,
+            "longitude": 105.854063
+        },
+        {
+            "name": "HN Quận Hoàng Mai",
+            "latitude": 20.975392,
+            "longitude": 105.85734
+        },
+        {
+            "name": "HN Quận Long Biên",
+            "latitude": 21.036727,
+            "longitude": 105.898499
+        },
+        {
+            "name": "HN Quận Nam Từ Liêm",
+            "latitude": 21.018568,
+            "longitude": 105.757613
+        },
+        {
+            "name": "HN Quận Tây Hồ",
+            "latitude": 21.06827,
+            "longitude": 105.823961
+        },
+        {
+            "name": "HN Quận Thanh Xuân",
+            "latitude": 20.994215,
+            "longitude": 105.819301
+        },
+        {
+            "name": "HN Thị xã Sơn Tây",
+            "latitude": 21.140451,
+            "longitude": 105.502147
+        },
+        {
+            "name": "HN Huyện Ba Vì",
+            "latitude": 21.199849,
+            "longitude": 105.42332
+        },
+        {
+            "name": "HN Huyện Chương Mỹ",
+            "latitude": 20.92366,
+            "longitude": 105.701699
+        },
+        {
+            "name": "HN Huyện Đan Phượng",
+            "latitude": 21.119409,
+            "longitude": 105.678884
+        },
+        {
+            "name": "HN Huyện Đông Anh",
+            "latitude": 21.140558,
+            "longitude": 105.846673
+        },
+        {
+            "name": "HN Huyện Gia Lâm",
+            "latitude": 21.019869,
+            "longitude": 105.936989
+        },
+        {
+            "name": "HN Huyện Hoài Đức",
+            "latitude": 21.022896,
+            "longitude": 105.703548
+        },
+        {
+            "name": "HN Huyện Mê Linh",
+            "latitude": 21.182207,
+            "longitude": 105.721857
+        },
+        {
+            "name": "HN Huyện Mỹ Đức",
+            "latitude": 20.686697,
+            "longitude": 105.744457
+        },
+        {
+            "name": "HN Huyện Phú Xuyên",
+            "latitude": 20.747463,
+            "longitude": 105.913211
+        },
+        {
+            "name": "HN Huyện Phúc Thọ",
+            "latitude": 21.102538,
+            "longitude": 105.550594
+        },
+        {
+            "name": "HN Huyện Quốc Oai",
+            "latitude": 20.990517,
+            "longitude": 105.639533
+        },
+        {
+            "name": "HN Huyện Sóc Sơn",
+            "latitude": 21.257032,
+            "longitude": 105.846211
+        },
+        {
+            "name": "HN Huyện Thạch Thất",
+            "latitude": 21.05573,
+            "longitude": 105.578778
+        },
+        {
+            "name": "HN Huyện Thanh Oai",
+            "latitude": 20.863447,
+            "longitude": 105.761025
+        },
+        {
+            "name": "HN Huyện Thanh Trì",
+            "latitude": 20.941556,
+            "longitude": 105.836016
+        },
+        {
+            "name": "HN Huyện Thường Tín",
+            "latitude": 20.870807,
+            "longitude": 105.862047
+        },
+        {
+            "name": "HN Huyện Ứng Hòa",
+            "latitude": 20.739734,
+            "longitude": 105.769241
+        }
+    ],
+    "api": {
+        "open_meteo": {
+            "weather_url": "https://api.open-meteo.com/v1/forecast",
+            "weather_params": {
+                "current": "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m",
+                "hourly": "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index",
+                "timezone": "Asia/Bangkok",
+                "past_days": 3
+            },
+            "aq_url": "https://air-quality-api.open-meteo.com/v1/air-quality",
+            "aq_params": {
+                "hourly": "pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,aerosol_optical_depth,dust,uv_index",
+                "timezone": "Asia/Bangkok",
+                "past_days": 3
+            }
+        }
     }
-  ],
-  "api": {
-    "open_meteo": {
-      "weather_url": "https://api.open-meteo.com/v1/forecast",
-      "weather_params": {
-        "current": "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m",
-        "hourly": "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index",
-        "timezone": "Asia/Bangkok",
-        "past_days": 3
-      },
-      "aq_url": "https://air-quality-api.open-meteo.com/v1/air-quality",
-      "aq_params": {
-        "hourly": "pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,aerosol_optical_depth,dust,uv_index",
-        "timezone": "Asia/Bangkok",
-        "past_days": 3
-      }
-    }
-  }
 }

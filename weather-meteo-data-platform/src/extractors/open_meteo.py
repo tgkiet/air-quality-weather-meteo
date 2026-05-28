@@ -75,16 +75,3 @@ class OpenMeteoExtractor:
             logger.error(f"Data Contract / JSON Decoding failed: {ve}")
             raise RuntimeError(f"Data Validation failed: {ve}") from ve
     
-# Example weather & meteo usage:
-if __name__ == "__main__":
-    # url = "https://archive-api.open-meteo.com/v1/archive"
-    url = "https://api.open-meteo.com/v1/forecast"
-    params = {
-            "latitude": 10.7756, "longitude": 106.7019, # Vị trí của TP.HCM
-            "current_weather": "true",
-            "timezone": "Asia/Bangkok",
-        }
-    
-    extractor = OpenMeteoExtractor(url)
-    data = extractor.get_open_meteo_data(params, expected_keys={"latitude", "longitude", "hourly"})
-    print(data)

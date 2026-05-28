@@ -31,10 +31,7 @@ sources:
 
       - name: bronze_historical_weather
         description: >
-          Bảng chứa dữ liệu lịch sử thời tiết và chất lượng không khí từ 3 nguồn:
-          (1) CSV Hà Nội 2022-08-02→2025-11-29 (nạp bởi load_historical_csvs.py),
-          (2) Archive API backfill HCM 2022-08-02→nay (backfill_history.py --location-prefix HCM),
-          (3) Archive API gap fill HN 2025-11-30→nay (backfill_history.py --location-prefix HN).
+          Backfill dữ liệu lịch sử từ Archive API (backfill_history.py) cho toàn bộ 52 khu vực (30 HN + 22 HCM).
           UNIQUE CONSTRAINT (datetime, lat, lon) đảm bảo idempotency.
         columns:
           - name: id

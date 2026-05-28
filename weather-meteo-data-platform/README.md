@@ -1,8 +1,7 @@
-# ☁️ Vietnam Weather & Air Quality Data Platform ☁️
+# 🌤️ Vietnam Weather & Air Quality Data Platform 🍃
 
-> **Enterprise-grade Data Engineering pipeline** tự động thu thập, chuẩn hóa và phân tích dữ liệu **thời tiết & chất lượng không khí** cho **20 khu vực quan trắc** trên 2 thành phố — **10 grid cells Hà Nội** và **10 grid cells TP.HCM** — cập nhật mỗi giờ và lưu trữ lịch sử từ năm 2022.
+> **Enterprise-grade Data Engineering pipeline** tự động thu thập, chuẩn hóa và phân tích dữ liệu **thời tiết & chất lượng không khí** cho **52 khu vực quan trắc** trên 2 thành phố — **30 Quận/Huyện Hà Nội** và **22 Quận/Huyện TP.HCM** — cập nhật mỗi giờ và lưu trữ lịch sử từ năm 2022.
 >
->  **Về Grid Resolution:** config.json ban đầu có 53 locations (31 HN + 22 HCM). Sau khi phân tích thực tế, Open-Meteo API chỉ trả về **20 grid cells độc lập** (resolution ~1km — các quận nội thành gần nhau được merge). Config đã được prune xuống 20 locations để loại bỏ duplicate và API call lãng phí.
 
 ---
 
@@ -11,8 +10,8 @@
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        EXTRACT (Apache Airflow)                      │
-│  Open-Meteo Forecast API        Open-Meteo Archive API    CSV Files  │
-│  (20 locations / batch call)    (backfill_history.py) (Hà Nội)  │
+│  Open-Meteo Forecast API        Open-Meteo Archive API               │
+│  (52 locations / batch call)    (backfill_history.py)             │
 └────────────────┬────────────────────────┬────────────────────┬───────┘
                  ▼                        ▼                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -32,8 +31,8 @@
 ┌──────────────────────────────────────────────────────────────────────┐
 │                    GOLD LAYER (Business-Ready)                        │
 │           gold_layer.mart_hourly_conditions (TABLE)                  │
-│    20 locations (10 HN + 10 HCM) × 168h forecast (~3,360 rows/run)     │
-│    sau khi prune config khớp với API grid resolution (~1km)             │
+│    52 locations (30 HN + 22 HCM) × 168h forecast (~8,736 rows/run)     │
+│    lấy dữ liệu độc lập cho toàn bộ các Quận/Huyện             │
 │    location_name | forecast_time | weather | AQ | alert_flags        │
 └──────────────────────────────────────────────────────────────────────┘
                              ▼
@@ -47,7 +46,7 @@
 | Layer | Tool | Version | Vai Trò |
 |---|---|---|---|
 | Orchestration | Apache Airflow | 3.2.0 | DAG `@hourly`, task retry, idempotency |
-| Extract | Python (OOP) | 3.13 | Batch API call, nearest-neighbor location matching |
+| Extract | Python (OOP) | 3.13 | Batch API call, strict index matching (zip) |
 | Storage | PostgreSQL | 16 | 3-tầng Bronze/Silver/Gold, JSONB, UNIQUE constraints |
 | Transform | dbt-core | 1.9.0 | LATERAL unnest, DISTINCT ON dedup, LEFT JOIN |
 | Infrastructure | Docker Compose | 2.x | Healthcheck, service dependency, DRY YAML anchors |
@@ -55,37 +54,9 @@
 
 ---
 
-## Phạm Vi Dữ Liệu — 20 Khu Vực Quan Trắc
+## Phạm Vi Dữ Liệu — 52 Khu Vực Quan Trắc
 
-### Hà Nội — 10 Grid Cells
-
-| Tên | Toạ Độ |
-|---|---|
-| HN Bắc Từ Liêm | 21.1105°N, 105.7605°E |
-| HN Bắc Từ Liêm Tây | 21.05°N, 105.74°E |
-| HN Chương Mỹ | 20.92°N, 105.7123°E |
-| HN Cầu Giấy | 21.0478°N, 105.8°E |
-| HN Hoàng Mai | 20.9883°N, 105.8549°E |
-| HN Hoàng Mai Nam | 20.9481°N, 105.8493°E |
-| HN Hà Đông Đông | 20.972°N, 105.7856°E |
-| HN Long Biên | 21.0491°N, 105.8831°E |
-| HN Nam Từ Liêm Tây | 21.0024°N, 105.7181°E |
-| HN Đông Anh | 21.1476°N, 105.9159°E |
-
-### TP.HCM — 10 Grid Cells
-
-| Tên | Toạ Độ |
-|---|---|
-| HCM Huyện Cần Giờ | 10.3966°N, 106.9087°E |
-| HCM Huyện Củ Chi | 11.0967°N, 106.5097°E |
-| HCM Huyện Hóc Môn | 10.8777°N, 106.5761°E |
-| HCM Huyện Nhà Bè | 10.651°N, 106.7259°E |
-| HCM Quận 1 | 10.7754°N, 106.6996°E |
-| HCM Quận 12 | 10.8613°N, 106.6642°E |
-| HCM Quận 7 | 10.7378°N, 106.7297°E |
-| HCM Quận 8 | 10.7211°N, 106.6292°E |
-| HCM Quận Tân Phú | 10.7919°N, 106.6278°E |
-| HCM Thành phố Thủ Đức | 10.851°N, 106.7549°E |
+Danh sách 52 khu vực đã được thiết lập sẵn trong `config.json`. Mọi tọa độ đều được trích xuất từ Nominatim (OpenStreetMap) đại diện cho trung tâm các Quận, Huyện, và Thị xã.
 
 ---
 
@@ -96,9 +67,9 @@
 ```
 Airflow logical_date ──► main.py --execution_date {logical_date}
     │
-    ├─► OpenMeteoExtractor.get_open_meteo_data(20 locations batch)
+    ├─► OpenMeteoExtractor.get_open_meteo_data(52 locations batch)
     │       └─► _inject_location_metadata()
-    │               nearest-neighbor matching (tolerance 0.15°)
+    │               strict index matching (zip)
     │               inject: requested_lat, requested_lon, location_name
     │
     ├─► PostgresLoader.insert_data(weather_forecast_hourly)
@@ -113,23 +84,15 @@ Airflow logical_date ──► main.py --execution_date {logical_date}
               ──► 2 Silver INCREMENTAL (DISTINCT ON, execution_date == var)
               ──► 1 Gold TABLE (LEFT JOIN, derived metrics)
     dbt test ──► 29 data quality tests (PASS/FAIL)
+    alert_job ─► Đẩy cảnh báo thời tiết/không khí qua Telegram
 ```
 
 ### Backfill Pipeline (Chạy 1 lần)
 
 ```bash
-# HCM — Archive API (10 grid cells từ 2022 đến nay)
-python3 backfill_history.py --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-24
-    └─► Lấy Weather + AQ theo từng location
-    └─► Align AQ/Weather theo time key (dict lookup, không phải positional)
-    └─► UPSERT → bronze_historical_weather
-        ON CONFLICT (datetime, lat, lon) DO UPDATE
-
-# Hà Nội — CSV (historical) + API gap
-python3 load_historical_csvs.py         # CSV đến 2025-11-29
-python3 backfill_history.py --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-24   # gap fill
+# Backfill toàn bộ dữ liệu lịch sử bằng API (100% tự động, không dùng CSV)
+python3 backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-date <YYYY-MM-DD>
+python3 backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date <YYYY-MM-DD>
 ```
 
 ---
@@ -163,20 +126,14 @@ docker compose up -d --build
 
 # 3. Đợi ~60s → Airflow UI: http://localhost:8080
 
-# 4. Nạp lịch sử Hà Nội từ CSV
-docker exec airflow_container \
-    python3 /opt/airflow/src/scripts/load_historical_csvs.py
-
-# 5. Backfill lịch sử HCM từ Archive API (~30-60 phút)
+# 4. Backfill dữ liệu lịch sử bằng Archive API (Hoàn toàn tự động)
 docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py \
-    --location-prefix HCM \
-    --start-date 2022-08-02 --end-date 2026-05-24
-
+    --location-prefix HN --start-date 2022-08-02 --end-date 2026-05-27
+    
 docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py \
-    --location-prefix HN \
-    --start-date 2025-11-30 --end-date 2026-05-24   # gap fill
+    --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-27
 
-# 6. Build Silver + Gold thủ công
+# 5. Build Silver + Gold thủ công
 docker exec airflow_container bash -c \
     "dbt run  --full-refresh \
                --project-dir /opt/airflow/dbt-transform \
@@ -185,7 +142,7 @@ docker exec airflow_container bash -c \
                --profiles-dir /home/airflow/.dbt"
 ```
 
-> ⚠️ **Reset hoàn toàn (xóa sạch data):**
+>  **Reset hoàn toàn (xóa sạch data):**
 > ```bash
 > docker compose down -v && docker compose up -d --build
 > ```
@@ -198,7 +155,7 @@ docker exec airflow_container bash -c \
 |---|---|
 | **Idempotency** | UPSERT everywhere — chạy lại cùng pipeline không tạo duplicate |
 | **Fail-Fast** | `raise` (không `return`) → Airflow đánh dấu FAILED đúng |
-| **Coordinate Matching** | Nearest-neighbor (tolerance 0.15°) — không dùng positional index |
+| **Coordinate Matching** | Strict Index Matching (zip) — an toàn tuyệt đối với lỗi grid snapping |
 | **Time Alignment** | AQ/Weather align theo `time_str` dict key — không phải array position |
 | **Timezone Safety** | `AT TIME ZONE 'Asia/Bangkok'` explicit ở Python và SQL |
 | **NULL Safety** | Guard `IS NULL` tường minh trước mọi so sánh số trong CASE |
@@ -218,20 +175,21 @@ weather-meteo-data-platform/
 ├── .env                        # không commit Git
 │
 ├── src/
-│   ├── config/config.json      # 20 locations + API URLs/params
+│   ├── config/config.json      # 52 locations + API URLs/params
 │   ├── extractors/open_meteo.py
 │   ├── loaders/
 │   │   ├── base_loader.py      # Connection pooling
 │   │   ├── postgres_loader.py  # UPSERT realtime data
-│   │   └── csv_loader.py       # COPY + UPSERT historical CSV
+│
 │   ├── scripts/
 │   │   ├── init_dbs.sh         # Tạo tables + UNIQUE constraints
-│   │   ├── load_historical_csvs.py
 │   │   └── backfill_history.py  # --start-date, --end-date
 │   ├── utils/logger.py
 │   └── main.py                 # ELT entrypoint (--execution_date)
 │
-├── airflow/dags/orchestrator.py   # DAG: @hourly, 3 tasks, retries=3
+├── airflow/                     
+│   ├── README.md
+│   └── dags/orchestrator.py        # DAG @hourly, 4 tasks, retries=3
 │
 └── dbt-transform/
     ├── models/
@@ -251,13 +209,12 @@ weather-meteo-data-platform/
 | `accepted_values` | temperature_level (5 values), uv_level (6 values), pm2_5_level (6 values) |
 | `source not_null` | Bronze: id, source_type, execution_date, datetime, lat, lon |
 | `source unique` | Bronze: id trong cả 2 bảng |
-| `not_null (warn)` | location_name trong Silver — warn vì Hanoi CSV historical có thể NULL |
 
-> *`location_name` test ở Gold dùng `severity: warn` để không block pipeline khi có Hanoi historical data (NULL từ CSV cũ).
+
 
 ---
 
-## Tài Liệu Chi Tiết
+## 📚 Tài Liệu Chi Tiết
 
 | | |
 |---|---|
@@ -269,18 +226,5 @@ weather-meteo-data-platform/
 
 ---
 
-## API Grid Resolution
-
-Open-Meteo Forecast/Archive API snap toạ độ về lưới model riêng (~1-10km resolution). Pipeline được thiết kế để sử dụng đúng **20 grid cells đại diện** (10 HN, 10 HCM) để bao phủ toàn bộ các khu vực trọng điểm.
-
-### Cách Pipeline Xử Lý
-
-1. **Luồng Realtime (`_inject_location_metadata()`):** Với mỗi API response item, hệ thống gán trực tiếp `location_name` từ cấu hình 20 trạm gốc. 
-   **Luồng Historical (`dbt Staging`):** Áp dụng công thức ánh xạ (mapping) để quy đổi các trạm đo cũ từ file CSV lịch sử về đúng 20 trạm chuẩn, đảm bảo dữ liệu quá khứ và hiện tại hoàn toàn đồng nhất.
-
-2. **Kết quả trong Silver/Gold**: Mỗi "khu vực đại diện" (grid cell) chứa dữ liệu thời tiết đại diện cho **tất cả các quận nằm trong bán kính ~5km** xung quanh đó. Đây là hành vi chuẩn mực của API khí tượng học.
-### Nếu Cần Độ Phân Giải Cao Hơn
-
-Xem xét Open-Meteo **Commercial API** hoặc nguồn dữ liệu khác (VD: VNMHA, WeatherAPI) có resolution cao hơn cho các điểm đô thị dày đặc.
-
-# TÍNH NĂNG TIẾP THEO: BOT TELEGRAM FOR WEATHER & AQ ALERT
+## API Data Completeness
+Dữ liệu được khai thác độc lập cho **52 khu vực (30 HN + 22 HCM)** với độ chính xác cao nhất từ Open-Meteo API. Pipeline đã loại bỏ toàn bộ dữ liệu CSV rác và lỗi thời để chuyển sang 100% tự động hóa.

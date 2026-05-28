@@ -35,64 +35,30 @@ def _inject_location_metadata(data, locations: list):
     This ensures weather and air quality datasets can be joined perfectly in the DB
     without grid snapping mismatches.
 
-    LOGIC-C FIX: Open-Meteo Batch API không đảm bảo thứ tự response khớp với
+    Open-Meteo Batch API không đảm bảo thứ tự response khớp với
     thứ tự request (API có thể sort/deduplicate coordinates). Match theo tọa độ
     thực tế của response (làm tròn 2 chữ số) thay vì match theo index.
 
     Side-effect note: Mutates dicts inside `data` in-place (intentional for performance).
     """
-    # Nearest-neighbor matching trong bán kính 0.1° (Open-Meteo grid resolution)
-    # Không thể dùng exact match vì:
-    #   1. API snap tọa độ về grid riêng, không phải tọa độ trong config
-    #   2. Nhiều config locations có thể cùng round-to-1 key (e.g. 21.0, 105.8)
-    # Strategy: với mỗi API response item, tìm config location gần nhất trong 0.1°
-    # Nếu 2 config locations cùng gần 1 API point → chọn cái gần nhất (Euclidean)
-
     items = data if isinstance(data, list) else [data]
 
     if len(items) != len(locations):
-        logger.warning(
-            f"API returned {len(items)} location(s) but config has {len(locations)}. "
-            "Some locations may be merged by Open-Meteo (nearby stations). "
-            "Check config.json for duplicate/overlapping coordinates."
-        )
-
-    MATCH_TOLERANCE = 0.15  # độ — ~15km, đủ rộng cho grid snapping nhưng không quá rộng
-
-    unmatched = 0
-    for item in items:
-        api_lat = float(item.get("latitude", 0))
-        api_lon = float(item.get("longitude", 0))
-
-        # Tìm config location gần nhất trong tolerance
-        best_match = None
-        best_dist  = float("inf")
-        for loc in locations:
-            dist = ((loc["latitude"] - api_lat) ** 2 + (loc["longitude"] - api_lon) ** 2) ** 0.5
-            if dist < best_dist:
-                best_dist  = dist
-                best_match = loc
-
-        if best_match and best_dist <= MATCH_TOLERANCE:
-            item["requested_latitude"]  = best_match["latitude"]
-            item["requested_longitude"] = best_match["longitude"]
-            item["location_name"]       = best_match["name"]
-        else:
-            item["requested_latitude"]  = api_lat
-            item["requested_longitude"] = api_lon
-            item["location_name"]       = f"UNKNOWN ({round(api_lat,2)},{round(api_lon,2)})"
-            unmatched += 1
-            logger.warning(
-                f"No config match within {MATCH_TOLERANCE}° for API response at "
-                f"({api_lat}, {api_lon}). Nearest config: {best_match['name'] if best_match else 'N/A'} "
-                f"at dist={best_dist:.3f}°"
-            )
-
-    if unmatched > 0:
         logger.error(
-            f"{unmatched} location(s) unmatched. Data loaded with UNKNOWN names. "
-            "Consider reviewing config.json coordinates vs actual API responses."
+            f"API returned {len(items)} location(s) but config has {len(locations)}. "
+            "Strict index matching failed! Check API response."
         )
+        raise ValueError("Mismatch between requested locations and API response items.")
+
+    for item, loc in zip(items, locations):
+        # Open-Meteo đảm bảo thứ tự mảng trả về KHỚP TUYỆT ĐỐI với thứ tự tọa độ gửi lên.
+        # Dù API có snap 2 quận gần nhau về cùng 1 tọa độ (grid cell), vị trí trong mảng vẫn không đổi.
+        # Do đó, chỉ cần gộp (zip) theo đúng index là an toàn 100%.
+        
+        # Ghi đè tọa độ lưới của API bằng tọa độ gốc của chúng ta để làm khóa chính
+        item["requested_latitude"]  = loc["latitude"]
+        item["requested_longitude"] = loc["longitude"]
+        item["location_name"]       = loc["name"]
 
     return data
 

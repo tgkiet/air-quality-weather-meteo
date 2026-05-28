@@ -2,6 +2,7 @@ services:
   postgres_db: 
     container_name: postgres_container
     image: postgres:16-alpine
+    restart: unless-stopped
     ports:
       - "5434:5432"
     environment:
@@ -48,49 +49,43 @@ services:
       # QUALITY-6 FIX: Set biến rõ ràng để logger.py phát hiện môi trường Docker
       # thay vì suy luận từ AIRFLOW_HOME (có thể set cả khi cài Airflow local).
       RUNNING_IN_DOCKER: "true"
-      # CSV_DATA_DIR: trỏ đến thư mục được mount chứa file CSV lịch sử Hà Nội.
-      # load_historical_csvs.py sẽ tỏ điểm này trước khi thử các path fallback khác.
-      CSV_DATA_DIR: /opt/airflow/csv-data
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./src:/opt/airflow/src
-      - ./.env:/opt/airflow/.env
-      # Mount thư mục dbt project để Airflow có thể gọi "dbt run" trực tiếp
-      # mà KHÔNG cần Docker socket (an toàn hơn phương pháp docker exec).
       - ./dbt-transform:/opt/airflow/dbt-transform
-      # INFRA-4 FIX: Mount CHỈ file profiles.yml (không mount cả .dbt/ directory)
-      # để tránh expose các file credentials cached khác có thể có trong .dbt/.
-      # :ro = read-only — container không thể ghi đè profiles.yml từ bên trong.
+      - ./.env:/opt/airflow/.env:ro
       - ./.dbt/profiles.yml:/home/airflow/.dbt/profiles.yml:ro
-      # Mount thư mục CSV dataset để load_historical_csvs.py đọc được file
-      # mà không cần copy file vào trong container.
-      - ../Open-Meteo-Dataset:/opt/airflow/csv-data:ro
     depends_on:
       postgres_db:
         # INFRA-1 FIX: Đợi đến khi postgres_db healthy (không chỉ started).
         condition: service_healthy
     networks:
       - meteo_network
-    # INFRA-2 FIX: Tách `airflow users create` ra thành block riêng với xử lý lỗi
-    # chính xác hơn. `|| true` cũ nuốt toàn bộ lỗi kể cả lỗi thực sự.
-    # Kiểm tra exit code cụ thể: exit 0 (success) hoặc exit 1 (user đã tồn tại) đều OK.
-    # Các lỗi khác (DB unreachable, permission denied) vẫn propagate ra ngoài.
+    # Lý do dùng `airflow users list | grep -q`:
+    # `airflow users create` trả về exit code 1 khi user đã tồn tại (FabAuthManager).
+    # Dùng `users create || true` sẽ nuốt cả lỗi thực sự (DB down, permission denied).
+    # Pattern check-then-create là cách duy nhất đúng cho cả 2 trường hợp:
+    #   - Lần chạy đầu tiên  : user chưa tồn tại → tạo mới.
+    #   - Lần restart tiếp theo: user đã tồn tại → bỏ qua, tiếp tục khởi động.
+    #   - DB unreachable      : `users list` fail → toàn bộ command fail → container crash
+    #     (đây là hành vi ĐÚNG — không bao giờ khởi động scheduler khi DB chưa sẵn sàng).
+    restart: unless-stopped
     command: >
       bash -c "
         airflow db migrate &&
-        (for i in {1..3}; do
+        (airflow users list 2>/dev/null | grep -q -w \"${_AIRFLOW_WWW_USER_USERNAME}\" ||
           airflow users create \
-            --username ${_AIRFLOW_WWW_USER_USERNAME} \
-            --password ${_AIRFLOW_WWW_USER_PASSWORD} \
+            --username \"${_AIRFLOW_WWW_USER_USERNAME}\" \
+            --password \"${_AIRFLOW_WWW_USER_PASSWORD}\" \
             --firstname Kiet --lastname Admin \
             --role Admin \
-            --email giakiet.work@gmail.com 2>&1 | grep -v 'already exists' && break || sleep 5;
-        done) || true &&
+            --email giakiet.work@gmail.com) &&
         airflow scheduler &
         airflow triggerer &
         airflow dag-processor &
-        airflow api-server
+        airflow api-server &
+        wait -n
       "
 
   redis:
@@ -184,7 +179,12 @@ services:
     command: ["/app/docker/docker-bootstrap.sh", "beat"]
     restart: unless-stopped
     depends_on:
-      - superset-worker
+      superset-init:
+        condition: service_completed_successfully
+      superset-worker:
+        condition: service_healthy
+    healthcheck:
+      disable: true
 
 volumes:
   postgres_data:

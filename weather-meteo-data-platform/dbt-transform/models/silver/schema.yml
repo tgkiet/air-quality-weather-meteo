@@ -6,10 +6,9 @@ models:
       Bảng Silver chứa dữ liệu thời tiết đã được bóc tách và làm sạch,
       lưu trữ theo cơ chế Incremental (DISTINCT ON + dbt MERGE).
       Gộp 2 nguồn: stg_weather_hourly (realtime 7 ngày) UNION ALL
-      stg_historical_weather (lịch sử CSV/backfill từ 2022).
+      stg_historical_weather (lịch sử backfill từ 2022).
       unique_key = (forecast_time, latitude, longitude).
-      Số locations thực tế: 20 grid cells (từ 20 entries trong config.json,
-      đã được prune từ 53 xuống 20 để khớp với API grid resolution ~1km).
+      Số locations thực tế: 52 locations (từ 52 entries trong config.json).
     columns:
       - name: forecast_time
         description: "Mốc thời gian dự báo (TIMESTAMPTZ — chuẩn UTC, đã shift từ Asia/Bangkok)"
@@ -25,18 +24,16 @@ models:
           - not_null
       - name: location_name
         description: >
-          Tên quận/huyện theo config.json. NULL với data lịch sử Hanoi CSV cũ.
-          Luôn có giá trị với realtime data và HCM backfill.
+          Tên quận/huyện theo config.json.
+          Luôn có giá trị (100% API).
         tests:
-          - not_null:
-              config:
-                severity: warn
+          - not_null
 
   - name: slv_air_quality_hourly
     description: >
       Bảng Silver chứa dữ liệu chất lượng không khí đã bóc tách.
       Gộp 2 nguồn: stg_air_quality_hourly (realtime ~5 ngày) UNION ALL
-      stg_historical_air_quality (lịch sử từ CSV từ 2022).
+      stg_historical_air_quality (lịch sử backfill từ 2022).
       unique_key = (forecast_time, latitude, longitude).
     columns:
       - name: forecast_time
@@ -52,8 +49,6 @@ models:
         tests:
           - not_null
       - name: location_name
-        description: "Tên quận/huyện. NULL với Hanoi CSV lịch sử."
+        description: "Tên quận/huyện."
         tests:
-          - not_null:
-              config:
-                severity: warn
+          - not_null

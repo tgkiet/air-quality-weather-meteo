@@ -18,7 +18,7 @@ SELECT DISTINCT ON (forecast_time, latitude, longitude)
 FROM stg_aq
 
 {% if is_incremental() %}
-    -- LOGIC-3 FIX: Incremental Pattern tối ưu bằng Airflow Context.
+    -- Incremental Pattern tối ưu bằng Airflow Context.
     -- Xem chi tiết tại slv_weather_hourly.sql. Pattern này giúp tiết kiệm 100% tài nguyên 
     -- xử lý dư thừa mà vẫn đảm bảo tính Lũy đẳng (Idempotency) khi vận hành Airflow.
     {% if var('execution_date', none) %}

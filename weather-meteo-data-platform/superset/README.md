@@ -77,7 +77,7 @@ Quyền hạn của user này được thiết lập chặt chẽ trong `src/scr
 **Q: Làm sao để Xóa Sạch (Hard Reset) toàn bộ hệ thống và bắt đầu lại từ đầu?**
 > **A:** Nếu bạn muốn dọn sạch Database và tải lại Image mới nhất (Clean Slate), hãy đứng ở thư mục gốc của dự án và chạy chuỗi lệnh sau:
 > ```bash
-> # 1. Tắt hệ thống và xóa toàn bộ Data Volumes (⚠️ MẤT DỮ LIỆU CŨ)
+> # 1. Tắt hệ thống và xóa toàn bộ Data Volumes ( MẤT DỮ LIỆU CŨ)
 > docker compose down -v
 > 
 > # 2. Xóa toàn bộ Docker Images (buộc Docker tải lại bản mới nhất)
@@ -94,4 +94,4 @@ Quyền hạn của user này được thiết lập chặt chẽ trong `src/scr
 File README này tập trung giải thích các quyết định về **Kiến trúc Hạ tầng (Infrastructure)**. 
 
 Sau khi hệ thống Superset đã khởi chạy thành công, để biết cách kết nối Database, sửa lỗi lệch múi giờ (Timezone) và vẽ các biểu đồ phân tích đúng chuẩn (tránh các lỗi dùng sai hàm `SUM`/`AVG`), vui lòng chuyển sang đọc tài liệu nghiệp vụ Data Analyst tại:
-👉 **[Sổ tay Khai thác Dữ liệu & Trực quan hóa (Superset Playbook)](../docs/superset_visualization_guide.md)**
+ **[Sổ tay Khai thác Dữ liệu & Trực quan hóa (Superset Playbook)](../docs/superset_visualization_guide.md)**

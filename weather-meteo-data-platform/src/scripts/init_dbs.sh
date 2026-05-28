@@ -53,7 +53,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 
 EOSQL
 
-# BUG-6 FIX: Tạo bảng bronze_historical_weather (cho CSV + HCM backfill)
+# Tạo bảng bronze_historical_weather (cho Archive API backfill toàn bộ 52 khu vực)
 # trong một psql session riêng để tránh transaction nesting issue.
 # Cột location_name được thêm vào để phân biệt tên địa điểm (HCM Quận 1, Hanoi Station...).
 # DO $$ LANGUAGE plpgsql để xử lý migration-safe (không lỗi nếu cột đã tồn tại).
@@ -84,12 +84,10 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     );
 
     -- -------------------------------------------------------------------------
-    -- "MỎ NEO" CHO TÍNH LŨY ĐẲNG CỦA BRONZE HISTORICAL:
-    -- BUG-NEW-1 FIX: Thêm UNIQUE constraint vào init_dbs.sh thay vì chỉ trong
-    -- csv_loader.py. Không có constraint này, backfill_history.py sẽ FAIL
-    -- với "there is no unique or exclusion constraint matching the ON CONFLICT
-    -- specification" nếu backfill chạy TRƯỚC csv_loader.
-    -- Constraint này cũng đảm bảo csv_loader UPSERT hoạt động đúng.
+    -- "MO NEO" CHO TINH LUY DANG CUA BRONZE HISTORICAL:
+    -- Constraint nay la tieu kien de UPSERT (ON CONFLICT DO UPDATE)
+    -- trong backfill_history.py hoat dong dung.
+    -- Khong co constraint nay → UPSERT se fail ngay lap tuc.
     -- -------------------------------------------------------------------------
     ALTER TABLE bronze_historical_weather
     ADD CONSTRAINT unique_historical_datetime_lat_lon
@@ -108,6 +106,20 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
             ALTER TABLE bronze_historical_weather ADD COLUMN location_name VARCHAR(255);
         END IF;
     END \$BODY\$;
+
+    -- =========================================================================
+    -- TẠO BẢNG ALERT HISTORY (Dùng cho alert_job.py chống spam)
+    -- =========================================================================
+    CREATE SCHEMA IF NOT EXISTS silver_layer;
+    
+    CREATE TABLE IF NOT EXISTS silver_layer.alert_history (
+        id SERIAL PRIMARY KEY,
+        location_name VARCHAR(255) NOT NULL,
+        forecast_time TIMESTAMPTZ NOT NULL,
+        alert_type VARCHAR(50) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT unique_alert_history UNIQUE(location_name, forecast_time, alert_type)
+    );
 
 EOSQL
 
@@ -139,7 +151,7 @@ EOSQL
 # Superset chỉ cần quyền SELECT (đọc) vào air_quality_db.gold_layer.
 # KHÔNG cấp quyền ghi — nguyên tắc Least Privilege (đặc quyền tối thiểu).
 #
-# BUG FIX: Phải PRE-CREATE schema gold_layer trước khi GRANT.
+# Phải PRE-CREATE schema gold_layer trước khi GRANT.
 # Lý do: init_dbs.sh chạy khi PostgreSQL khởi tạo lần đầu, trước khi dbt chạy.
 # Nếu GRANT USAGE ON SCHEMA gold_layer mà schema chưa tồn tại → lỗi "schema does not exist".
 # Giải pháp: tạo schema tại đây, dbt sẽ dùng schema đã có để tạo bảng (dbt không xóa schema).

@@ -21,14 +21,14 @@ source_data AS (
         raw_id,
         execution_date,
 
-        -- LOGIC-1 FIX: Xóa magic number fallback (10.8→10.78, 106.7→106.70) vì chúng
+        -- Xóa magic number fallback (10.8→10.78, 106.7→106.70) vì chúng
         -- là dead code sau khi _inject_location_metadata() đã inject requested_latitude
         -- vào toàn bộ items. Nhánh WHEN IS NOT NULL luôn đúng → 2 WHEN còn lại
         -- không bao giờ chạy tới. Giữ lại gây nhầm lẫn cho người đọc sau.
         ROUND(CAST(single_json->>'requested_latitude'  AS NUMERIC), 4) AS latitude,
         ROUND(CAST(single_json->>'requested_longitude' AS NUMERIC), 4) AS longitude,
 
-        -- BUG-5 FIX: Trích xuất location_name từ raw_json để surface lên Silver & Gold.
+        -- Trích xuất location_name từ raw_json để surface lên Silver & Gold.
         -- Trước đây location_name được inject vào JSONB nhưng không bao giờ được đọc ra.
         -- Không có location_name → Dashboard chỉ thấy tọa độ số, không biết tên quận/trạm.
         single_json->>'location_name' AS location_name,

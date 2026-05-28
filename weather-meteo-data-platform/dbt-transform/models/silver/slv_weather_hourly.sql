@@ -11,7 +11,7 @@ WITH stg_weather AS (
     FROM {{ ref('stg_historical_weather') }}
 )
 
--- LOGIC-1 FIX: Xử lý lặp dữ liệu dự báo.
+-- Xử lý lặp dữ liệu dự báo.
 -- Mỗi lần gọi API trả về dự báo 168h. Hai lần gọi liên tiếp sẽ có các khung giờ trùng nhau.
 -- Nếu không lọc bỏ, lệnh MERGE của dbt sẽ lỗi do nhiều dòng nguồn cập nhật cùng 1 dòng đích.
 --
@@ -21,7 +21,7 @@ SELECT DISTINCT ON (forecast_time, latitude, longitude)
 FROM stg_weather
 
 {% if is_incremental() %}
-    -- LOGIC-3 FIX: Incremental Pattern tối ưu bằng Airflow Context.
+    -- Incremental Pattern tối ưu bằng Airflow Context.
     -- Bằng cách nhận tham số `execution_date` từ Airflow, dbt CHỈ xử lý đúng batch của lần chạy đó.
     -- Đảm bảo hiệu suất 100% (không reprocess batch cũ) và an toàn tuyệt đối khi Clear Task / Backfill.
     -- Nếu chạy tay không truyền tham số (vd: debug local), fallback về `>=` để giữ an toàn (dù sẽ quét dư).

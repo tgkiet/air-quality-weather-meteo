@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 # Tách riêng ra để tuân thủ nguyên tắc DRY (Don't Repeat Yourself).
 default_args = {
     'owner': 'gkinhere-airflow',
-    'description': 'Orchestrator DAG for OpenMeteo Weather & Air Quality ELT pipeline (20 grid-cell locations)',
+    'description': 'Orchestrator DAG for OpenMeteo Weather & Air Quality ELT pipeline (52 grid-cell locations)',
     # Airflow tự động retry 3 lần nếu task FAILED, trước khi báo lỗi thật sự.
     # Quan trọng: Retry vẫn dùng cùng execution_date → Đảm bảo Idempotency.
     'retries': 3,
@@ -67,7 +67,7 @@ with DAG(
     #
     # 29 data quality tests phủ sóng 3 tầng:
     #   - Bronze : 7 tests (unique + not_null cho cả 2 bảng Bronze)
-    #   - Silver : 8 tests (not_null + location_name warn cho 2 bảng Silver)
+    #   - Silver : 8 tests (not_null cho các dimension cốt lõi ở 2 bảng Silver)
     #   - Gold   : 14 tests (not_null dimensions + accepted_values labels + alerts)
     dbt_test = BashOperator(
         task_id='dbt_test',

@@ -14,17 +14,9 @@
 -- MATERIALIZATION: Được cấu hình là TABLE trong dbt_project.yml
 --   (Không khai báo lại ở đây — tuân thủ nguyên tắc DRY/OOP)
 --
+--
 -- SCHEMA: Được cấu hình là gold_layer trong dbt_project.yml
 --   (Tách biệt khỏi silver_layer để phân quyền RBAC)
---
--- LƯU Ý QUAN TRỌNG CHO TƯƠNG LAI (Historical Mapping Artifact):
---   Trong quá trình Backfill dữ liệu lịch sử (2022-2025), nhiều trạm đo vật lý 
---   (toạ độ lat/lon khác nhau) được ánh xạ (map) chung về 1 `location_name` đại diện (VD: HN Cầu Giấy).
---   Vì khóa chính của Silver là (forecast_time, lat, lon), bảng Gold sẽ xuất hiện 
---   nhiều dòng cho cùng 1 (forecast_time, location_name). 
---   CÁCH XỬ LÝ (BI Tool): Khi trực quan hóa trên Superset, luôn sử dụng hàm tổng hợp `AVG(metric)` 
---   khi Group By theo `location_name`. Không dùng `SUM()` vì sẽ cộng dồn các tọa độ bị trùng.
---   Với dữ liệu Realtime (từ giữa 2026 trở đi), hệ thống chỉ có 1 tọa độ duy nhất cho mỗi location_name.
 -- ============================================================
 
 WITH weather AS (
@@ -53,9 +45,8 @@ joined AS (
         w.latitude,
         w.longitude,
         w.execution_date AT TIME ZONE 'Asia/Bangkok' AS execution_date,
-        -- w.location_name hiển thị tên Grid Cell (HN Cầu Giấy, HCM Quận 1...)
-        -- cho 20 locations (10 HN + 10 HCM) sau khi prune config.
-        -- NULL với Hanoi CSV data (CSV không có cột này) → Dashboard xử lý bằng COALESCE.
+        -- w.location_name hiển thị tên vùng quan trắc (HN Quận Cầu Giấy, HCM Quận 1...)
+        -- cho 52 locations (30 HN + 22 HCM).
         w.location_name,
 
         -- ==========================================
@@ -134,7 +125,7 @@ joined AS (
 
         -- 4d. Cờ Cảnh báo Thời tiết (Weather Alert Flag)
         --     LUÔN trả về TRUE/FALSE, KHÔNG BAO GIỜ NULL (phù hợp với not_null test).
-        --     Logic: (1) Nhiệt độ >= 38°C → TRUE (temperature luôn có dữ liệu 7 ngày)
+        --     (1) Nhiệt độ >= 38°C → TRUE (temperature luôn có dữ liệu 7 ngày)
         --            (2) UV >= 8 VÀ UV không NULL → TRUE (guard UV NULL tường minh)
         --            (3) Mọi trường hợp còn lại → FALSE
         --     Không dùng `uv_index >= 8 OR temperature >= 38` trực tiếp vì:
@@ -165,9 +156,7 @@ joined AS (
     --    đảm bảo tuyệt đối bộ 3 cột này là Khóa Chính (Primary Key).
     -- 2. Join trên bộ 3 Khóa Chính đảm bảo toán học 100% là phép JOIN 1:1,
     --    hoàn toàn không có khả năng xảy ra Cartesian Fanout (nhân bản dòng).
-    -- 3. KHÔNG JOIN theo `location_name` vì dữ liệu lịch sử CSV có location_name = NULL,
-    --    việc thêm `location_name` sẽ gây lỗi (NULL = NULL → UNKNOWN → Drop data)
-    --    hoặc ép dùng `IS NOT DISTINCT FROM` (tốn CPU vô ích).
+    -- 3. Chỉ sử dụng Khóa chính toán học, không phụ thuộc vào `location_name`.
     LEFT JOIN air_quality AS aq
         ON  w.forecast_time = aq.forecast_time
         AND w.latitude      = aq.latitude
@@ -175,7 +164,7 @@ joined AS (
 )
 
 SELECT * FROM joined
--- LOGIC-4 FIX: Xóa ORDER BY — không có tác dụng khi materialized='table'.
+-- Xóa ORDER BY — không có tác dụng khi materialized='table'.
 -- PostgreSQL không đảm bảo physical storage order, và SELECT sử sau không
 -- kế thừa ORDER BY này. Để tăng tốc query, tạo index thay thế:
 --   CREATE INDEX ON mart_hourly_conditions(forecast_time);

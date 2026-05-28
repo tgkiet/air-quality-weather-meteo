@@ -1,14 +1,13 @@
 """
 backfill_history.py — Backfill dữ liệu lịch sử Weather & Air Quality từ Open-Meteo Archive API.
 
-Dùng cho 2 trường hợp:
-  1. HCM full backfill (không có CSV):
-     python3 backfill_history.py --location-prefix HCM \
-         --start-date 2022-08-02 --end-date 2026-05-24
+Dùng để khởi tạo dữ liệu lịch sử cho toàn bộ 52 Vùng quan trắc (30 HN + 22 HCM):
 
-  2. HN gap fill (sau khi đã nạp CSV đến 2025-11-29):
      python3 backfill_history.py --location-prefix HN \
-         --start-date 2025-11-30 --end-date 2026-05-24
+         --start-date 2022-08-02 --end-date 2026-05-27
+
+     python3 backfill_history.py --location-prefix HCM \
+         --start-date 2022-08-02 --end-date 2026-05-27
 
 Idempotency: Script có thể chạy lại bất kỳ lúc nào mà không tạo duplicate
              (ON CONFLICT DO UPDATE tại bronze_historical_weather).
@@ -82,8 +81,8 @@ class HistoricalBackfiller(BasePostgresLoader):
         # ──────────────────────────────────────────────────────
         self.connect()
 
-        # location_id offset: tránh xung đột với ID của CSV Hà Nội
-        # CSV HN dùng ID thực từ OpenAQ (vd: 2539). HCM dùng 3000000+, HN gap 4000000+.
+
+
         id_offset = 3000000 if self.location_prefix == "HCM " else 4000000
 
         success_count = 0
@@ -219,11 +218,11 @@ class HistoricalBackfiller(BasePostgresLoader):
         """
         Gộp Weather + AQ theo time key, sau đó UPSERT vào bronze_historical_weather.
 
-        LOGIC-A FIX: Align AQ theo time_str dict lookup (không phải positional index).
+        Align AQ theo time_str dict lookup (không phải positional index).
         Open-Meteo Archive API trả về Weather và AQ độc lập — time arrays có thể
         bắt đầu từ offset khác nhau hoặc bị thiếu giờ.
 
-        BUG-1 FIX: safe_get guard IndexError khi array ngắn hơn time array.
+        safe_get guard IndexError khi array ngắn hơn time array.
         """
         times = weather.get("time", [])
         if not times:
@@ -293,7 +292,7 @@ class HistoricalBackfiller(BasePostgresLoader):
                 location_id            = EXCLUDED.location_id,
                 location_name          = EXCLUDED.location_name;
         """
-        # BUG-2 FIX: Explicit template cast ::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'
+        # Explicit template cast ::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'
         # → Postgres chuyển giờ địa phương về TIMESTAMPTZ (UTC base) đúng chuẩn
         template = (
             "(%s::TIMESTAMP AT TIME ZONE 'Asia/Bangkok', "
@@ -317,15 +316,14 @@ def main():
         description=(
             "Backfill lịch sử Weather & Air Quality từ Open-Meteo Archive API.\n"
             "\n"
-            "Ví dụ:\n"
-            "Ví dụ 1 (HCM full backfill):\n"
-            "  python3 src/scripts/backfill_history.py \\\n"
-            "            --location-prefix HCM \\\n"
-            "            --start-date 2022-08-02 --end-date 2026-05-24\n\n"
-            "Ví dụ 2 (HN gap fill):\n"
+            "Ví dụ (HN — 30 Quận/Huyện):\n"
             "  python3 src/scripts/backfill_history.py \\\n"
             "            --location-prefix HN \\\n"
-            "            --start-date 2025-11-30 --end-date 2026-05-24\n"
+            "            --start-date 2022-08-02 --end-date 2026-05-27\n\n"
+            "Ví dụ (HCM — 22 Quận/Huyện):\n"
+            "  python3 src/scripts/backfill_history.py \\\n"
+            "            --location-prefix HCM \\\n"
+            "            --start-date 2022-08-02 --end-date 2026-05-27\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -334,7 +332,7 @@ def main():
         type=str,
         required=True,
         choices=["HCM", "HN"],
-        help="Nhóm locations cần backfill: 'HCM' (10 grid cells) hoặc 'HN' (10 grid cells)"
+        help="Nhóm locations cần backfill: 'HCM' (22 locations) hoặc 'HN' (30 locations)"
     )
     parser.add_argument(
         "--start-date",
@@ -346,7 +344,7 @@ def main():
         "--end-date",
         type=str,
         required=True,
-        help="Ngày kết thúc (YYYY-MM-DD). VD: 2026-05-24"
+        help="Ngày kết thúc (YYYY-MM-DD). VD: 2026-05-27"
     )
     args = parser.parse_args()
 

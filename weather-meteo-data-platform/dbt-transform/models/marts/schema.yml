@@ -29,16 +29,8 @@ models:
       - name: location_name
         description: >
           Tên địa điểm theo chuẩn config.json.
-          Hà Nội: "HN [Quận/Huyện]" (10 grid cells).
-          TP.HCM: "HCM [Quận/Huyện]" (10 grid cells).
-          NULL chỉ xảy ra với dữ liệu lịch sử Hà Nội nạp từ CSV cũ
-          trước khi có cột location_name.
         tests:
-          - not_null:
-              config:
-                severity: warn
-                # Warn (không fail) vì data lịch sử Hanoi CSV có thể NULL.
-                # Realtime data luôn có location_name.
+          - not_null
 
       # ── WEATHER METRICS ───────────────────────────────────────────────────
       - name: temperature_2m

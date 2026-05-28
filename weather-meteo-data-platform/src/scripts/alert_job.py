@@ -29,6 +29,7 @@ class WeatherAlerterJob(BasePostgresLoader):
         super().__init__()
         # Khởi tạo Telegram Alerter. Nếu cấu hình lỗi, Fail-Fast sẽ dừng job ngay tại đây.
         self.alerter = TelegramAlerter()
+        self.target_region_prefix = os.environ.get("ALERT_TARGET_REGION_PREFIX", "HCM ")
 
     def run_alert_check(self):
         self.connect()
@@ -50,14 +51,17 @@ class WeatherAlerterJob(BasePostgresLoader):
                     AND ah.alert_type = 'HEAVY_RAIN'
                 WHERE g.forecast_time >= NOW() AT TIME ZONE 'Asia/Bangkok'
                   AND g.forecast_time <= (NOW() AT TIME ZONE 'Asia/Bangkok') + INTERVAL '48 hours'
-                  AND g.precipitation_probability > 80
+                  AND g.precipitation_probability >= 80
                   AND g.precipitation > 2.0
+                  AND g.location_name LIKE %s -- Dùng biến truyền vào (chống SQL Injection)
                   AND ah.id IS NULL -- Điều kiện CỐT LÕI: Chỉ lấy những record chưa từng cảnh báo
                 ORDER BY g.location_name ASC, g.forecast_time ASC;
             """
             
             with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(query_new_alerts)
+                # Tìm prefix (vd: 'HCM %')
+                prefix_pattern = self.target_region_prefix.strip() + ' %'
+                cursor.execute(query_new_alerts, (prefix_pattern,))
                 new_alerts = cursor.fetchall()
             
             if not new_alerts:
@@ -66,7 +70,8 @@ class WeatherAlerterJob(BasePostgresLoader):
 
             # 2. Định dạng tin nhắn chuẩn Production (Monospace Table, No Emojis, Clear Headers)
             message_lines = ["<pre>"]
-            message_lines.append("[CẢNH BÁO] DỰ BÁO XÁC SUẤT & LƯỢNG MƯA TẠI TPHCM")
+            region_name = self.target_region_prefix.strip()
+            message_lines.append(f"[CẢNH BÁO] DỰ BÁO MƯA LỚN TẠI {region_name}")
             message_lines.append("=================================================")
             message_lines.append("LOCATION       | TIME (BKK)  | PROB(%) | RAIN(MM)")
             message_lines.append("-------------------------------------------------")
@@ -77,6 +82,7 @@ class WeatherAlerterJob(BasePostgresLoader):
                 # Xử lý chuỗi thông minh (Smart Abbreviation) để không bị cắt chữ
                 loc_name = r["location_name"]
                 loc_name = loc_name.replace("Thành phố ", "TP.")
+                loc_name = loc_name.replace("Thị xã ", "TX.")
                 loc_name = loc_name.replace("Quận ", "Q.")
                 loc_name = loc_name.replace("Huyện ", "H.")
                 
