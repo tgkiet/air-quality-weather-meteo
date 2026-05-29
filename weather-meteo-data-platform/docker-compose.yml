@@ -74,13 +74,7 @@ services:
     command: >
       bash -c "
         airflow db migrate &&
-        (airflow users list 2>/dev/null | grep -q -w \"${_AIRFLOW_WWW_USER_USERNAME}\" ||
-          airflow users create \
-            --username \"${_AIRFLOW_WWW_USER_USERNAME}\" \
-            --password \"${_AIRFLOW_WWW_USER_PASSWORD}\" \
-            --firstname Kiet --lastname Admin \
-            --role Admin \
-            --email giakiet.work@gmail.com) &&
+        (airflow users list 2>/dev/null | grep -q -w \"${_AIRFLOW_WWW_USER_USERNAME}\" || airflow users create --username \"${_AIRFLOW_WWW_USER_USERNAME}\" --password \"${_AIRFLOW_WWW_USER_PASSWORD}\" --firstname Kiet --lastname Admin --role Admin --email giakiet.work@gmail.com) &&
         airflow scheduler &
         airflow triggerer &
         airflow dag-processor &
