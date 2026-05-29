@@ -66,7 +66,8 @@ File này chứa các thông số kỹ thuật có thể thay đổi theo môi t
 | `api.timeout_sec` | `30` | Timeout cho mỗi request API, tính bằng giây |
 | `database.max_retries` | `3` | Số lần retry khi kết nối PostgreSQL thất bại |
 | `database.retry_delay_sec` | `5` | Thời gian chờ giữa các lần retry database, tính bằng giây |
-| `alert_thresholds` | `Dict` | Các mốc cảnh báo (mưa > 2.0mm, tỉ lệ > 80%, PM2.5 > 55) dùng chung cho Bot |
+| `alert_thresholds` | `Dict` | Các mốc cảnh báo dùng chung cho Bot Push/Pull: `rain_mm` (3.0), `pm25_alert_ugm3` (55.0), `uv_alert_index` (8.0), `heatwave_alert_temp` (38.0). Hỗ trợ phân lớp rủi ro động. |
+| `alert_job_config` | `Dict` | Chứa `schedule_hours` định nghĩa lịch phát thanh Holistic Briefing: Sáng (6h) và Tối (20h), giúp decouple hoàn toàn khỏi code Python. |
 | `telegram_bot.districts` | `List` | Danh sách các Quận/Huyện hiển thị lên Menu của Telegram Bot |
 | `alert_job.target_region_prefix` | `"HCM "` | Dùng để lọc khu vực phát thanh cảnh báo khẩn cấp (Push Alert) |
 
@@ -76,7 +77,8 @@ File này chứa các thông số kỹ thuật có thể thay đổi theo môi t
 - API hoặc network không ổn định và cần tăng `max_retries`.
 - Database khởi động chậm trong Docker/Airflow và cần tăng `retry_delay_sec`.
 - Môi trường production cần ngưỡng timeout/retry khác môi trường local.
-- Cần điều chỉnh **mốc cảnh báo mưa / không khí** cho Bot mà không phải sửa Code.
+- Cần điều chỉnh **mốc cảnh báo mưa / không khí / tia UV / nắng nóng** cho Bot mà không phải sửa Code (Zero-Hardcode).
+- Thay đổi **lịch phát thanh** (giờ Sáng / Tối) của cronjob Alert.
 - Thêm hoặc bớt các Quận hiển thị trong Bot Telegram.
 
 Nếu file này bị mất hoặc JSON sai cú pháp, `ConfigManager` sẽ fallback về giá trị mặc định trong code. Lưu ý giá trị fallback hiện tại của `api.timeout_sec` là `10`, khác với giá trị runtime đang cấu hình trong file JSON là `30`.

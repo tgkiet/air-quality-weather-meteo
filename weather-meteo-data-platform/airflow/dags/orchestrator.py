@@ -22,6 +22,9 @@ with DAG(
     schedule='@hourly',
     # Chỉnh thành True khi cần Backfill dữ liệu lịch sử.
     catchup=False,
+    # INFRA-2 FIX: Khóa Concurrent Runs (Phát hiện từ Runtime Audit)
+    # Ngăn chặn 2 DAG Runs chạy đè dbt MERGE lên nhau, bảo toàn Temporal Ordering.
+    max_active_runs=1,
 ) as dag:
 
     # TASK 1: EXTRACT & LOAD (E → L)
@@ -83,7 +86,7 @@ with DAG(
     # Sử dụng PythonOperator thông qua BashOperator để tránh xung đột dependency nội bộ Airflow.
     send_alert = BashOperator(
         task_id='send_alert',
-        bash_command='python3 /opt/airflow/src/scripts/alert_job.py',
+        bash_command='python3 /opt/airflow/src/scripts/alert_job.py --execution_date "{{ data_interval_end | ts }}"',
     )
 
     # TASK DEPENDENCIES - Thứ tự chạy

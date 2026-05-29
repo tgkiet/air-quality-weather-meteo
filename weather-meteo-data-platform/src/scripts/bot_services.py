@@ -1,3 +1,6 @@
+import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
+from contextlib import contextmanager
 import psycopg2.extras
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -34,55 +37,90 @@ class BotDatabaseManager:
     """Handles all database interactions for the Telegram Bot."""
     def __init__(self, loader_instance):
         self.loader = loader_instance
+        try:
+            self.pool = ThreadedConnectionPool(
+                minconn=1,
+                maxconn=5,
+                dbname=self.loader.db_name,
+                user=self.loader.db_user,
+                password=self.loader.db_password,
+                host=self.loader.db_host,
+                port=self.loader.db_port
+            )
+            logger.info("Initialized ThreadedConnectionPool for Telegram Bot.")
+        except Exception as e:
+            logger.error(f"Failed to create ThreadedConnectionPool: {e}")
+            raise
+
+    @contextmanager
+    def get_db_connection(self):
+        conn = None
+        for attempt in range(2):
+            conn = self.pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                break
+            except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                self.pool.putconn(conn, close=True)
+                conn = None
+                if attempt == 1:
+                    raise
+        try:
+            yield conn
+        except Exception:
+            if conn and not conn.closed:
+                conn.rollback()
+            raise
+        finally:
+            if conn:
+                self.pool.putconn(conn)
 
     def init_lang_table(self):
-        self.loader.connect()
         try:
-            with self.loader.connection.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS silver_layer.bot_user_preferences (
-                        chat_id    BIGINT     PRIMARY KEY,
-                        language   VARCHAR(2) NOT NULL DEFAULT 'en'
-                                   CHECK (language IN ('en', 'vi')),
-                        updated_at TIMESTAMP  NOT NULL DEFAULT NOW()
-                    );
-                """)
-            self.loader.connection.commit()
+            with self.get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS silver_layer.bot_user_preferences (
+                            chat_id    BIGINT     PRIMARY KEY,
+                            language   VARCHAR(2) NOT NULL DEFAULT 'en'
+                                       CHECK (language IN ('en', 'vi')),
+                            updated_at TIMESTAMP  NOT NULL DEFAULT NOW()
+                        );
+                    """)
+                conn.commit()
         except Exception as e:
-            self.loader.connection.rollback()
             logger.warning(f"Could not init preferences table: {e}")
 
     def get_user_lang(self, chat_id: int) -> str:
-        self.loader.connect()
         try:
-            with self.loader.connection.cursor() as cur:
-                cur.execute(
-                    "SELECT language FROM silver_layer.bot_user_preferences WHERE chat_id = %s",
-                    (chat_id,)
-                )
-                row = cur.fetchone()
-                return row[0] if row else "en"
-        except Exception:
-            self.loader.connection.rollback()
+            with self.get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT language FROM silver_layer.bot_user_preferences WHERE chat_id = %s",
+                        (chat_id,)
+                    )
+                    row = cur.fetchone()
+                    return row[0] if row else "en"
+        except Exception as e:
+            logger.error(f"Error getting user lang: {e}")
             return "en"
 
     def set_user_lang(self, chat_id: int, lang: str):
-        self.loader.connect()
         try:
-            with self.loader.connection.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO silver_layer.bot_user_preferences (chat_id, language, updated_at)
-                    VALUES (%s, %s, NOW())
-                    ON CONFLICT (chat_id)
-                    DO UPDATE SET language = EXCLUDED.language, updated_at = NOW();
-                """, (chat_id, lang))
-            self.loader.connection.commit()
+            with self.get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO silver_layer.bot_user_preferences (chat_id, language, updated_at)
+                        VALUES (%s, %s, NOW())
+                        ON CONFLICT (chat_id)
+                        DO UPDATE SET language = EXCLUDED.language, updated_at = NOW();
+                    """, (chat_id, lang))
+                conn.commit()
         except Exception as e:
-            self.loader.connection.rollback()
             logger.error(f"Error saving user lang: {e}")
 
-    def query_weather(self, db_name: str, limit: int = 6) -> list:
-        self.loader.connect()
+    def query_weather(self, db_name: str, limit: int = 6, offset: int = 0) -> list:
         try:
             sql = """
                 SELECT
@@ -99,20 +137,27 @@ class BotDatabaseManager:
                     temperature_level
                 FROM gold_layer.mart_hourly_conditions
                 WHERE location_name = %s
-                  AND forecast_time >= NOW() - INTERVAL '30 minutes'
+                  AND forecast_time >= (NOW() AT TIME ZONE 'Asia/Bangkok') + CAST(%s AS INTERVAL)
                 ORDER BY forecast_time ASC
                 LIMIT %s;
             """
-            with self.loader.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute(sql, (db_name, limit))
-                return cur.fetchall()
+            with self.get_db_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    interval_str = f"{offset} hours" if offset > 0 else "-1 hours"
+                    cur.execute(sql, (db_name, interval_str, limit))
+                    rows = cur.fetchall()
+            
+            # Slicing to maintain ~6 rows output for optimal UX
+            if limit == 12:
+                return rows[::2]
+            elif limit == 24:
+                return rows[::4]
+            return rows
         except Exception as e:
             logger.error(f"Error query_weather: {e}")
-            self.loader.connection.rollback()
             return []
 
     def query_aqi(self, db_name: str) -> dict | None:
-        self.loader.connect()
         try:
             sql = """
                 SELECT
@@ -126,17 +171,17 @@ class BotDatabaseManager:
                 FROM gold_layer.mart_hourly_conditions
                 WHERE location_name = %s
                   AND pm2_5 IS NOT NULL
-                  AND forecast_time <= NOW() + INTERVAL '1 hour'
+                  AND forecast_time <= (NOW() AT TIME ZONE 'Asia/Bangkok') + INTERVAL '1 hour'
                 ORDER BY forecast_time DESC
                 LIMIT 1;
             """
-            with self.loader.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute(sql, (db_name,))
-                row = cur.fetchone()
-                return dict(row) if row else None
+            with self.get_db_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(sql, (db_name,))
+                    row = cur.fetchone()
+                    return dict(row) if row else None
         except Exception as e:
             logger.error(f"Error query_aqi: {e}")
-            self.loader.connection.rollback()
             return None
 
 
@@ -148,12 +193,18 @@ class BotFormatter:
         self.pm25_alert_threshold = pm25_alert_threshold
         self.bkk_tz = bkk_tz
 
-    def fmt_weather(self, label: str, rows: list, lang: str) -> str:
+    def fmt_weather(self, label: str, rows: list, lang: str, limit: int = 6, offset: int = 0) -> str:
         now = datetime.now(self.bkk_tz).strftime("%H:%M  %d/%m/%Y")
         sep = "─" * 32
         
-        title = f"WEATHER FORECAST · {label.upper()}\nUpdated {now}  |  Next {len(rows)} hours\n{sep}" if lang == "en" else \
-                f"DỰ BÁO THỜI TIẾT · {label.upper()}\nCập nhật {now}  |  {len(rows)} giờ tới\n{sep}"
+        time_desc_en = f"Next {limit} hours"
+        time_desc_vi = f"{limit} giờ tới"
+        if offset == 24:
+            time_desc_en = "Tomorrow (24-48h)"
+            time_desc_vi = "Ngày mai (24-48h)"
+        
+        title = f"WEATHER FORECAST · {label.upper()}\nUpdated {now}  |  {time_desc_en}\n{sep}" if lang == "en" else \
+                f"DỰ BÁO THỜI TIẾT · {label.upper()}\nCập nhật {now}  |  {time_desc_vi}\n{sep}"
         lines = [title]
 
 

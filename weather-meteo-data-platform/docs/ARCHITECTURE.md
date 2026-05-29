@@ -169,6 +169,25 @@ Models dbt trong `models/marts/`:
         │ bash_command: "dbt test --project-dir ... --profiles-dir ..."
         └── Chạy 29 bài Data Quality Tests (NotNull, Unique, AcceptedValues).
             Nếu Pass → Pipeline SUCCESS. Nếu Fail → Pipeline FAILED.
+            
+        ▼ (Nếu dbt_test PASS)
+[BashOperator: alert_job]
+        │ bash_command: "python3 /opt/airflow/src/scripts/alert_job.py"
+        └── Lõi Push Bot (Dual-Core):
+            ├── 06:00: Phát thanh "Bản tin Sáng" (Toàn bộ Rủi ro Hôm nay)
+            ├── 20:00: Phát thanh "Bản tin Tối" (Toàn bộ Rủi ro Ngày mai)
+            ├── Giờ khác: Quét đột xuất 6H tới (Stateful Deduplication chống Spam)
+            └── Phân lớp lượng mưa tự động (Mưa lớn >=5mm, Mưa vừa >=3mm)
+
+---
+[Độc lập bên ngoài Airflow]
+[Telegram Polling Bot Container]
+        │ Chạy ngầm liên tục (`infinity_polling`)
+        └── Lõi Pull Bot (Interactive):
+            ├── Trả lời Query của người dùng theo thời gian thực
+            ├── Áp dụng Phân trang (Pagination) in-memory an toàn
+            ├── Xử lý Concurrent Requests với Threaded Connection Pooling
+            └── Clean UI qua `edit_message_text`
 ```
 
 **Nếu bất kỳ bước nào raise Exception:**

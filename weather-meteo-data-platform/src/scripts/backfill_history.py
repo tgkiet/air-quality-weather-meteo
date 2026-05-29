@@ -42,6 +42,7 @@ class HistoricalBackfiller(BasePostgresLoader):
         self.start_date      = start_date
         self.end_date        = end_date
         self.location_prefix = location_prefix  # "HCM " hoặc "HN "
+        self.session         = requests.Session()
 
     def run_backfill(self):
         # ──────────────────────────────────────────────────────
@@ -185,7 +186,7 @@ class HistoricalBackfiller(BasePostgresLoader):
         """
         for attempt in range(max_retries):
             try:
-                r = requests.get(url, params=params, timeout=60)
+                r = self.session.get(url, params=params, timeout=60)
                 if r.status_code == 200:
                     return r.json().get("hourly", {})
                 elif r.status_code == 429 or r.status_code >= 500:
@@ -302,7 +303,7 @@ class HistoricalBackfiller(BasePostgresLoader):
         )
         try:
             with self.connection.cursor() as cursor:
-                execute_values(cursor, query, insert_rows, template=template)
+                execute_values(cursor, query, insert_rows, template=template, page_size=1000)
             self.connection.commit()
             logger.info(f"  Upserted {len(insert_rows)} rows for {location_name}.")
         except Error as e:

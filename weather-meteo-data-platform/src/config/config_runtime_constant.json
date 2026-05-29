@@ -10,10 +10,16 @@
   },
   "alert_thresholds": {
     "rain_probability_pct": 80,
-    "rain_mm": 2.0,
-    "pm25_alert_ugm3": 55.0
+    "rain_mm": 3.0,
+    "pm25_alert_ugm3": 55.0,
+    "uv_alert_index": 8.0,
+    "heatwave_alert_temp": 38.0
   },
   "telegram_bot": {
+    "cities": [
+      {"id": "HN", "label_vi": "Hà Nội", "label_en": "Ha Noi"},
+      {"id": "HCM", "label_vi": "TP.HCM", "label_en": "HCMC"}
+    ],
     "districts": [
       {"label": "Quan 1",      "db_name": "HCM Quận 1"},
       {"label": "Quan 3",      "db_name": "HCM Quận 3"},
@@ -36,10 +42,24 @@
       {"label": "Hoc Mon",     "db_name": "HCM Huyện Hóc Môn"},
       {"label": "Cu Chi",      "db_name": "HCM Huyện Củ Chi"},
       {"label": "Nha Be",      "db_name": "HCM Huyện Nhà Bè"},
-      {"label": "Can Gio",     "db_name": "HCM Huyện Cần Giờ"}
+      {"label": "Can Gio",     "db_name": "HCM Huyện Cần Giờ"},
+      {"label": "Hoan Kiem",   "db_name": "HN Quận Hoàn Kiếm"},
+      {"label": "Ba Dinh",     "db_name": "HN Quận Ba Đình"},
+      {"label": "Dong Da",     "db_name": "HN Quận Đống Đa"},
+      {"label": "Hai Ba Trung","db_name": "HN Quận Hai Bà Trưng"},
+      {"label": "Cau Giay",    "db_name": "HN Quận Cầu Giấy"},
+      {"label": "Thanh Xuan",  "db_name": "HN Quận Thanh Xuân"},
+      {"label": "Hoang Mai",   "db_name": "HN Quận Hoàng Mai"},
+      {"label": "Tay Ho",      "db_name": "HN Quận Tây Hồ"},
+      {"label": "Ha Dong",     "db_name": "HN Quận Hà Đông"}
     ]
   },
   "alert_job": {
-    "target_region_prefix": "HCM "
+    "scheduled_region_prefix": "HCM ",
+    "sudden_region_prefix": "",
+    "schedule_hours": {
+      "morning": 6,
+      "evening": 20
+    }
   }
 }

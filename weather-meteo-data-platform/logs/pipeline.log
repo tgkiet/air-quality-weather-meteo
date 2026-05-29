@@ -110,3 +110,8 @@
 2026-04-22 13:11:50 | PostgresLoader       | INFO     | PostgreSQL connection closed.
 2026-04-22 13:11:50 | MainPipeline         | INFO     | 
 --- Hoàn thành luồng ELT ---
+2026-05-29 21:37:01 | ConfigManager        | INFO     | Successfully loaded/reloaded configurations from disk.
+2026-05-29 21:37:01 | ConfigManager        | ERROR    | Failed to load configs: Expecting property name enclosed in double quotes: line 1 column 3 (char 2). Keeping old state if available.
+2026-05-29 21:39:17 | ConfigManager        | INFO     | Successfully loaded/reloaded configurations from disk.
+2026-05-29 21:39:17 | AlertJob             | INFO     | Execution BKK Hour: 20
+2026-05-29 21:39:17 | AlertJob             | INFO     | This is a historical backfill run (> 24 hours old). Skipping Telegram alerts to prevent SPAM.

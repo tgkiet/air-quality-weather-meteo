@@ -86,9 +86,9 @@ Chạy tự động khi Postgres container khởi tạo lần đầu. Tạo:
 - `bronze_historical_weather` + `UNIQUE(datetime, lat, lon)` + cột `location_name`
 
 ### Kiến trúc Dual-Core Telegram Bot
-- **`telegram_bot.py`**: Lõi Pull (Interactive). Quản lý Keyboard, Handler lệnh `/weather`, `/aqi`. Tách biệt hoàn toàn DB logic.
-- **`bot_services.py`**: Chứa `BotDatabaseManager` và `BotFormatter`. Định dạng số liệu thô thành ngôn ngữ tự nhiên (Max-Ping UX). Xử lý "0.0mm Paradox".
-- **`alert_job.py`**: Lõi Push (Cronjob). Chạy bản tin 06:00, 20:00 và khẩn cấp (6H window). Có cơ chế **Stateful Deduplication** (lưu `silver_layer.alert_history`) để chống spam.
+- **`telegram_bot.py`**: Lõi Pull (Interactive). Quản lý Keyboard, Handler lệnh `/weather`, `/aqi`. Tích hợp cơ chế **State Editing** (giữ 1 tin nhắn duy nhất) và **Phân trang (Pagination)** 6h/12h/24h. Tách biệt hoàn toàn DB logic.
+- **`bot_services.py`**: Chứa `BotDatabaseManager` (với Threaded Connection Pooling) và `BotFormatter`. Định dạng số liệu thô thành ngôn ngữ tự nhiên. Xử lý "0.0mm Paradox" và giới hạn 4096 ký tự của Telegram.
+- **`alert_job.py`**: Lõi Push (Cronjob). Chạy bản tin Đa rủi ro (Holistic Briefing: Mưa, UV, PM2.5, Nhiệt độ) lúc 06:00, 20:00 và khẩn cấp (6H window). Có cơ chế **Stateful Deduplication** (lưu `silver_layer.alert_history`) để chống spam và **System Heartbeat**.
 
 ### backfill_history.py
 ```bash

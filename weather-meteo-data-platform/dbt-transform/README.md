@@ -175,3 +175,6 @@ dbt test --select slv_weather_hourly \
 | `profiles.yml` mount read-only (`ro`) | Bảo mật — không để Airflow container ghi đè credentials |
 | `generate_schema_name.sql` macro override | Tránh schema xấu kiểu `silver_layer_gold_layer` |
 | Gold `is_air_quality_alert` nullable | NULL ≠ FALSE — phân biệt "không có data" với "không alert" |
+| Bỏ `ORDER BY` trong model Tầng Gold (`mart_hourly_conditions`) | PostgreSQL `table` không lưu thứ tự vật lý, lệnh sort cuối model là vô dụng. Thay thế bằng Table Index (nếu cần). |
+| Giữ các cờ cảnh báo `is_weather_alert` tĩnh (hardcode) | Cờ tĩnh ở Data Mart chuyên phục vụ vẽ Dashboard Superset. Cảnh báo linh hoạt của Push Bot được decouple hoàn toàn và cấu hình qua file JSON. |
+| Xóa magic numbers tọa độ ở Staging | Tọa độ chuẩn (requested_lat/lon) đã được tiêm (inject) từ Python ở tầng Extract. dbt không cần gánh trách nhiệm sửa lỗi Grid Snapping của API nữa. |

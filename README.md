@@ -64,12 +64,14 @@ Hệ thống cung cấp giải pháp toàn diện với:
 
 ---
 
-## 🤖 Consumption Layer (Telegram Bot & Alert)
+## Consumption Layer (Telegram Bot & Alert)
 
-Hệ thống giao tiếp với người dùng qua 3 kịch bản Push Notification chính:
-- **Bản tin Sáng (06:00 - AQI):** Cảnh báo ô nhiễm không khí (bụi mịn PM2.5) cho **toàn bộ ngày hôm nay**, giúp người dùng chuẩn bị khẩu trang trước khi đi làm.
-- **Bản tin Tối (20:00 - Mưa Lớn):** Tổng hợp rủi ro mưa lớn cho **toàn bộ ngày mai**, giúp người dùng lên kế hoạch lịch trình.
-- **Cảnh báo Đột xuất (Mưa Khẩn Cấp):** Các giờ còn lại, hệ thống liên tục quét trước **cửa sổ 6 giờ tới (từ thời điểm hiện tại)** để phát hiện mưa bất chợt. Tích hợp cơ chế **Stateful Deduplication**, đảm bảo cảnh báo khẩn cấp chỉ kích hoạt **đúng 1 lần** cho 1 cơn mưa, chống spam tuyệt đối.
+Hệ thống giao tiếp với người dùng qua kiến trúc **Dual-Core Bot** (Data-as-a-Product):
+- **Pull Bot (Interactive)**: Hỗ trợ người dùng chủ động tra cứu thời tiết với menu **Phân trang (Pagination)** 6h/12h/24h. Giao diện được tối ưu bằng **State Editing** (luôn giữ 1 tin nhắn duy nhất chống Spam). Chịu tải cao nhờ **Threaded Connection Pooling**.
+- **Push Bot (Holistic Briefing & Sudden Alert)**:
+  - **Bản tin Định kỳ (06:00 & 20:00)**: Tổng hợp đồng thời 4 rủi ro lớn (Mưa, Bụi mịn PM2.5, Tia UV, Nắng gắt) cho Ngày/Ngày mai. Hỗ trợ **Phân lớp Cảnh báo** (Mưa lớn >=5.0mm, Mưa vừa >=3.0mm).
+  - **System Heartbeat**: Gửi bản tin "Thời tiết lý tưởng" nếu hệ thống an toàn, đảm bảo Observability.
+  - **Cảnh báo Đột xuất (Khung giờ còn lại)**: Nhìn trước 6H để bám sát thời tiết. Tích hợp **Stateful Deduplication**, đảm bảo cảnh báo khẩn cấp chỉ réo tên người dùng đúng 1 lần cho 1 sự kiện, chống spam tuyệt đối.
 
 ---
 

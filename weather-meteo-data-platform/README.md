@@ -106,13 +106,16 @@ python3 backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-d
 python3 backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date <YYYY-MM-DD>
 ```
 
+> ⚠️ **LƯU Ý QUAN TRỌNG VỀ IDEMPOTENCY:** 
+> Do kiến trúc sử dụng `execution_date` để lọc Incremental tại tầng Silver, sau khi chạy script Backfill, Airflow batch bình thường sẽ KHÔNG tự động Merge dữ liệu quá khứ. Bạn **BẮT BUỘC** phải chạy lệnh `dbt run --full-refresh` để nạp toàn bộ lịch sử vào Silver/Gold layer.
+
 ---
 
 ## Cột Quan Trọng trong Gold Layer
 
 | Cột | Kiểu | Mô Tả |
 |---|---|---|
-| `forecast_time` | TIMESTAMPTZ | Thời điểm dự báo (UTC) |
+| `forecast_time` | TIMESTAMP | Thời điểm dự báo (Naive - Đã ép về giờ BKK) |
 | `location_name` | VARCHAR | Tên quận/huyện (HN/HCM prefix) |
 | `latitude`, `longitude` | NUMERIC | Toạ độ canonical từ config |
 | `temperature_2m` | NUMERIC | Nhiệt độ °C |
@@ -177,14 +180,16 @@ docker exec airflow_container bash -c \
 
 ---
 
-## Kiến trúc Dual-Core Telegram Bot
-Hệ thống sử dụng Bot Telegram làm giao diện người dùng cuối (Consumption Layer) với các chuẩn mực khắt khe:
-- **Strict OOP**: Tách biệt hoàn toàn Controller (`telegram_bot.py`), Service/Formatter (`bot_services.py`), và DB Manager.
-- **Zero Hardcode**: Toàn bộ mốc cảnh báo (VD: Mưa >2.0mm, PM2.5 >55), danh sách Quận, và Prefix khu vực được khóa trong `config_runtime_constant.json` và nạp qua Singleton `ConfigManager`.
-- **Max-Ping UX**: Thuật ngữ nhân tính hóa, xử lý triệt để "0.0mm Paradox" (không mưa thì ẩn xác suất gây nhiễu), layout căn lề chuẩn Micro-Dashboard.
-- **Bản tin Sáng (06:00 - AQI)**: Cảnh báo ô nhiễm không khí (bụi mịn PM2.5) cho **toàn bộ ngày hôm nay**, giúp người dùng chuẩn bị khẩu trang trước khi đi làm.
-- **Bản tin Tối (20:00 - Mưa Lớn)**: Tổng hợp rủi ro mưa lớn cho **toàn bộ ngày mai**, giúp người dùng lên kế hoạch lịch trình.
-- **Cảnh báo Đột xuất (Mưa Khẩn Cấp)**: Các giờ còn lại, `alert_job.py` liên tục quét trước **cửa sổ 6 giờ tới (tính từ thời điểm hiện tại)** để phát hiện mưa bất chợt. Tích hợp cơ chế **Stateful Deduplication** (ghi nhận trạng thái vào `silver_layer.alert_history`), đảm bảo cảnh báo khẩn cấp chỉ kích hoạt **đúng 1 lần** cho 1 cơn mưa, chống spam tuyệt đối.
+## Kiến trúc Dual-Core Telegram Bot (Consumption Layer)
+Hệ thống sử dụng Bot Telegram làm giao diện Data-as-a-Product với các chuẩn mực khắt khe:
+- **Strict OOP & Connection Pooling**: Tách biệt hoàn toàn Controller (`telegram_bot.py`), Service/Formatter (`bot_services.py`). Xử lý concurrent requests mượt mà nhờ kiến trúc Pool kết nối.
+- **Pull Bot - Phân trang (Pagination) & UI Cleanup**: Người dùng có quyền tra cứu tương lai theo khung (6h, 12h, 24h, Ngày Mai). Giao diện áp dụng cơ chế **State Editing** (`edit_message_text`), đảm bảo khung chat Telegram luôn giữ 1 tin nhắn duy nhất, cực kỳ gọn gàng. Thuật toán Slicing in-memory giúp tránh vượt giới hạn 4096 ký tự của API Telegram.
+- **Push Bot - Bản tin Đa Rủi Ro (Holistic Briefing)**: 
+  - Thay vì gửi cảnh báo lẻ tẻ, hệ thống sẽ phát thanh bản tin Gộp lúc 06:00 (Hôm nay) và 20:00 (Ngày mai). 
+  - Bản tin quét đồng thời 4 rủi ro lớn: **Bụi mịn (PM2.5), Tia UV, Nắng gắt (Heatwave), và Mưa**. 
+- **Layered Alerts (Phân lớp Cảnh báo)**: Không chỉ là nhị phân (Có/Không), thuật toán tự động phân loại mức độ Mưa (Mưa vừa: >=3.0mm vs Mưa lớn: >=5.0mm) để người dùng có quyết định hành động tương xứng (chống Spam).
+- **System Heartbeat**: Nếu ngày mai/hôm nay thời tiết hoàn hảo, Bot vẫn phát 1 thông báo "Trời đẹp" để DevOps/Người dùng biết rằng Pipeline Airflow và hệ thống Bot vẫn đang sống (Health Check ngầm định).
+- **Zero Hardcode**: Toàn bộ mốc cảnh báo (VD: PM2.5 >55, UV >8.0) và giờ phát thanh được tách hoàn toàn ra khỏi Python và dbt, khóa chặt trong `config_runtime_constant.json`.
 
 ---
 

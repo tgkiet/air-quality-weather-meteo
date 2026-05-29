@@ -47,8 +47,14 @@ sources:
             description: "Vĩ độ"
             tests:
               - not_null
+              - bounds:
+                  min_value: -90
+                  max_value: 90
           - name: lon
             description: "Kinh độ"
             tests:
               - not_null
+              - bounds:
+                  min_value: -180
+                  max_value: 180
 

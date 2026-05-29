@@ -9,24 +9,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.extractors.open_meteo import OpenMeteoExtractor
 from src.loaders.postgres_loader import PostgresLoader
 from src.utils.logger import get_logger
+from src.utils.config_manager import config_manager
 
 logger = get_logger("MainPipeline")
 
-
-def _load_api_config() -> tuple:
-    """
-    Đọc config.json và trả về phần cấu hình Open-Meteo cùng danh sách locations.
-    Tách ra hàm riêng để dễ test và rõ ràng hơn.
-    """
-    config_path = os.path.join(os.path.dirname(__file__), 'config', 'config.json')
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data["api"]["open_meteo"], data["locations"]
-    except FileNotFoundError:
-        raise FileNotFoundError(f"API config file not found at: {config_path}")
-    except (KeyError, json.JSONDecodeError) as e:
-        raise ValueError(f"Invalid config.json structure: {e}") from e
 
 
 def _inject_location_metadata(data, locations: list):
@@ -79,10 +65,12 @@ def main():
     logger.info(f"--- Bắt đầu chạy luồng ELT | execution_date: {current_exec_date} ---")
 
     # ------------------------------------------------------------------
-    # 2. Nạp cấu hình API (URL, params) từ config.json
-    #    ConfigManager chỉ quản lý runtime constants (timeout, retry).
+    # 2. Nạp cấu hình API (URL, params) từ ConfigManager
+    #    Đã tích hợp đọc cả 2 file JSON theo chuẩn SRP (Single Responsibility).
     # ------------------------------------------------------------------
-    api_cfg, locations = _load_api_config()
+    api_cfg = config_manager.open_meteo_api
+    locations = config_manager.locations
+    
     weather_url    = api_cfg["weather_url"]
     weather_params = api_cfg["weather_params"].copy()
     aq_url         = api_cfg["aq_url"]

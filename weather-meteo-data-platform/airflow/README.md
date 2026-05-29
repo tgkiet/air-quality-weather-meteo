@@ -68,12 +68,13 @@ dbt test --project-dir /opt/airflow/dbt-transform \
 ```bash
 python3 /opt/airflow/src/scripts/alert_job.py
 ```
-- Lõi Push của kiến trúc Dual-Core Telegram Bot. Tự động quét Data Mart để phát thanh 3 bản tin:
-  1. **Bản tin Tối (20:00)**: Tổng hợp rủi ro mưa lớn toàn bộ Ngày Mai.
-  2. **Bản tin Sáng (06:00)**: Khuyến cáo AQI trong 24h tới.
+- Lõi Push của kiến trúc Dual-Core Telegram Bot. Tự động quét Data Mart để phát thanh:
+  1. **Bản tin Định kỳ (06:00 & 20:00)**: Tổng hợp toàn bộ rủi ro (Mưa, Bụi mịn PM2.5, Tia UV, Nắng gắt) cho Ngày/Ngày mai (Holistic Briefing).
+  2. **System Heartbeat**: Gửi báo cáo "Trời đẹp" nếu không có rủi ro nào.
   3. **Cảnh báo Đột xuất (Khung giờ còn lại)**: Nhìn trước 6H, kích hoạt Stateful Deduplication để chống Spam.
+- Tự động phân lớp lượng mưa: Mưa vừa (>=3.0mm) và Mưa lớn (>=5.0mm).
 - Phụ thuộc vào `dbt_test`: Chỉ gửi cảnh báo nếu dữ liệu qua được kiểm định.
-- **Zero Hardcode**: Toàn bộ mốc cảnh báo (VD: Xác suất >= 80% & Lượng mưa > 2.0mm) được nạp động từ `config_runtime_constant.json`.
+- **Zero Hardcode**: Toàn bộ mốc cảnh báo, ngưỡng UV/Nhiệt độ, và lịch phát thanh được nạp động từ `config_runtime_constant.json`.
 
 ---
 

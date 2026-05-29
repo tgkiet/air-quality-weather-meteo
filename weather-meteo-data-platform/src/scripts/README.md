@@ -128,19 +128,19 @@ docker exec airflow_container \
 
 **Mục đích:** Cung cấp giao diện tra cứu Thời tiết & AQI chủ động qua Telegram.
 
-- **`telegram_bot.py` (Controller):** Tuân thủ tuyệt đối OOP. Quản lý State (ngôn ngữ EN/VI) và Inline Keyboard Menu. Phân luồng Request người dùng nhưng **không** xử lý DB hay Format text.
+- **`telegram_bot.py` (Controller):** Tuân thủ tuyệt đối OOP. Quản lý State (ngôn ngữ EN/VI) và Inline Keyboard Menu. Phân luồng Request người dùng nhưng **không** xử lý DB hay Format text. Giao diện tích hợp **State Editing** (`edit_message_text`) để làm sạch khung chat, chống Spam tin nhắn.
 - **`bot_services.py` (Service Layer):**
-    - `BotDatabaseManager`: Khởi tạo và truy xuất bảng `bot_user_preferences`, query dữ liệu từ tầng Gold (Data Mart).
-    - `BotFormatter`: Xử lý triệt để các rào cản UX (VD: "0.0mm Paradox" - ẩn tỉ lệ mưa nếu lượng mưa = 0). Định dạng tin nhắn song ngữ chuẩn Micro-Dashboard phẳng (Không dùng icon emoji rườm rà).
+    - `BotDatabaseManager`: Khởi tạo và truy xuất bảng user, query dữ liệu từ Data Mart. Tích hợp **Threaded Connection Pooling** đảm bảo an toàn Thread-safe khi bot đón lượng lớn concurrent users. Hỗ trợ query Phân trang (Pagination) thông qua SQL `LIMIT` và Python slicing.
+    - `BotFormatter`: Xử lý Phân trang hiển thị linh hoạt (6h, 12h, 24h, Ngày Mai). Định dạng tin nhắn song ngữ chuẩn Micro-Dashboard phẳng (Không dùng icon emoji rườm rà). Xử lý triệt để các rào cản UX (VD: "0.0mm Paradox" - ẩn tỉ lệ mưa nếu lượng mưa = 0).
 
 ## `alert_job.py` — Lõi Broadcast Push Alert
 
-**Mục đích:** Cronjob định kỳ chạy sau `dbt test` để quét Data Mart và phát thanh tin nhắn khẩn.
-- Được thiết kế với kiến trúc **Dual-Core Push**:
-    1. **Bản tin Tối (20:00)**: Tổng hợp rủi ro mưa lớn Ngày Mai.
-    2. **Bản tin Sáng (06:00)**: Khuyến cáo AQI trong 24h tới.
+**Mục đích:** Cronjob định kỳ chạy sau `dbt test` để quét Data Mart và phát thanh tin nhắn khẩn cấp.
+- Được thiết kế với kiến trúc **Dual-Core Push** và **Holistic Briefing (Đa Rủi Ro)**:
+    1. **Bản tin Định kỳ (06:00 & 20:00)**: Tổng hợp toàn bộ rủi ro trong Ngày/Ngày mai. Phân lớp cảnh báo thông minh: **Mưa lớn/Mưa vừa, Bụi mịn PM2.5, Tia UV, Nắng gắt (Heatwave)**.
+    2. **System Heartbeat**: Gửi bản tin "Thời tiết lý tưởng" nếu Data Mart xác nhận không có bất kỳ rủi ro nào vượt mốc, giúp DevOps dễ dàng giám sát tính khả dụng của Pipeline.
     3. **Cảnh báo Đột xuất (Khung giờ còn lại)**: Chống Spam bằng **Stateful Deduplication** (lưu trạng thái vào `silver_layer.alert_history`), đảm bảo một sự kiện mưa lớn trong 6H tới chỉ "réo" người dùng 1 lần duy nhất.
-- Đã được refactor triệt để **Zero Hardcode**: Toàn bộ điều kiện query lượng mưa và AQI được lấy động từ `config_manager`, độc lập hoàn toàn với cờ tĩnh của dbt.
+- Đạt chuẩn **Zero Hardcode**: Toàn bộ điều kiện query lượng mưa, mốc giờ chạy (morning/evening) và ngưỡng UV/Nhiệt độ được nạp động từ `config_manager`. Phân lớp cảnh báo lượng mưa (Layered Alerts) xử lý tại tầng code, độc lập với Pipeline ETL.
 
 ---
 

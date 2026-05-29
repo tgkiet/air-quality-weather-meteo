@@ -78,9 +78,10 @@ class ConfigManager:
     "retry_delay_sec": 5
   },
   "alert_thresholds": {
-    "rain_probability_pct": 80,
-    "rain_mm": 2.0,
-    "pm25_alert_ugm3": 55.0
+    "rain_mm": 3.0,
+    "pm25_alert_ugm3": 55.0,
+    "uv_alert_index": 8.0,
+    "heatwave_alert_temp": 38.0
   },
   "telegram_bot": {
     "districts": [
@@ -88,7 +89,8 @@ class ConfigManager:
     ]
   },
   "alert_job": {
-    "target_region_prefix": "HCM "
+    "target_region_prefix": "HCM ",
+    "schedule_hours": [6, 20]
   }
 }
 ```
