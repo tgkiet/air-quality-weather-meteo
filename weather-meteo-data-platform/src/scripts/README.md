@@ -1,7 +1,7 @@
 # scripts/ — System Scripts
 
 ## Nhiệm vụ
-Chứa các script khởi tạo infrastructure và nạp dữ liệu lịch sử. **Không** phải logic pipeline thường ngày.
+Chứa các script khởi tạo infrastructure, nạp dữ liệu lịch sử (backfill) và toàn bộ các **Consumption Apps** (Interactive Bot & Push Alerts) để phân phối dữ liệu tới người dùng cuối.
 
 ---
 
@@ -121,6 +121,26 @@ docker exec airflow_container \
 |---|---|---|
 | HCM backfill | 3000000 + idx | Tránh conflict với HN backfill |
 | HN backfill | 4000000 + idx | Tránh conflict với HCM |
+
+---
+
+## `telegram_bot.py` & `bot_services.py` — Lõi Interactive Pull Bot
+
+**Mục đích:** Cung cấp giao diện tra cứu Thời tiết & AQI chủ động qua Telegram.
+
+- **`telegram_bot.py` (Controller):** Tuân thủ tuyệt đối OOP. Quản lý State (ngôn ngữ EN/VI) và Inline Keyboard Menu. Phân luồng Request người dùng nhưng **không** xử lý DB hay Format text.
+- **`bot_services.py` (Service Layer):**
+    - `BotDatabaseManager`: Khởi tạo và truy xuất bảng `bot_user_preferences`, query dữ liệu từ tầng Gold (Data Mart).
+    - `BotFormatter`: Xử lý triệt để các rào cản UX (VD: "0.0mm Paradox" - ẩn tỉ lệ mưa nếu lượng mưa = 0). Định dạng tin nhắn song ngữ chuẩn Micro-Dashboard phẳng (Không dùng icon emoji rườm rà).
+
+## `alert_job.py` — Lõi Broadcast Push Alert
+
+**Mục đích:** Cronjob định kỳ chạy sau `dbt test` để quét Data Mart và phát thanh tin nhắn khẩn.
+- Được thiết kế với kiến trúc **Dual-Core Push**:
+    1. **Bản tin Tối (20:00)**: Tổng hợp rủi ro mưa lớn Ngày Mai.
+    2. **Bản tin Sáng (06:00)**: Khuyến cáo AQI trong 24h tới.
+    3. **Cảnh báo Đột xuất (Khung giờ còn lại)**: Chống Spam bằng **Stateful Deduplication** (lưu trạng thái vào `silver_layer.alert_history`), đảm bảo một sự kiện mưa lớn trong 6H tới chỉ "réo" người dùng 1 lần duy nhất.
+- Đã được refactor triệt để **Zero Hardcode**: Toàn bộ điều kiện query lượng mưa và AQI được lấy động từ `config_manager`, độc lập hoàn toàn với cờ tĩnh của dbt.
 
 ---
 

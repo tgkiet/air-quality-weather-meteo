@@ -68,9 +68,12 @@ dbt test --project-dir /opt/airflow/dbt-transform \
 ```bash
 python3 /opt/airflow/src/scripts/alert_job.py
 ```
-- Gửi thông báo Telegram khi phát hiện nguy cơ mưa lớn (Xác suất >= 80% & Lượng mưa > 2.0mm) trong vòng 48h tới.
+- Lõi Push của kiến trúc Dual-Core Telegram Bot. Tự động quét Data Mart để phát thanh 3 bản tin:
+  1. **Bản tin Tối (20:00)**: Tổng hợp rủi ro mưa lớn toàn bộ Ngày Mai.
+  2. **Bản tin Sáng (06:00)**: Khuyến cáo AQI trong 24h tới.
+  3. **Cảnh báo Đột xuất (Khung giờ còn lại)**: Nhìn trước 6H, kích hoạt Stateful Deduplication để chống Spam.
 - Phụ thuộc vào `dbt_test`: Chỉ gửi cảnh báo nếu dữ liệu qua được kiểm định.
-- Stateful Deduplication: Dùng `silver_layer.alert_history` để ghi nhớ, đảm bảo mỗi sự kiện chỉ được cảnh báo đúng 1 lần.
+- **Zero Hardcode**: Toàn bộ mốc cảnh báo (VD: Xác suất >= 80% & Lượng mưa > 2.0mm) được nạp động từ `config_runtime_constant.json`.
 
 ---
 

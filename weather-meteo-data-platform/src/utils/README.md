@@ -71,11 +71,24 @@ class ConfigManager:
   "api": {
     "max_retries": 3,
     "backoff_factor": 1,
-    "timeout_sec": 10
+    "timeout_sec": 30
   },
   "database": {
     "max_retries": 3,
     "retry_delay_sec": 5
+  },
+  "alert_thresholds": {
+    "rain_probability_pct": 80,
+    "rain_mm": 2.0,
+    "pm25_alert_ugm3": 55.0
+  },
+  "telegram_bot": {
+    "districts": [
+      {"label": "Quan 1", "db_name": "HCM Quận 1"}
+    ]
+  },
+  "alert_job": {
+    "target_region_prefix": "HCM "
   }
 }
 ```
@@ -85,16 +98,21 @@ class ConfigManager:
 |---|---|---|
 | `api_config` | `dict` | `OpenMeteoExtractor` (lấy retry, timeout) |
 | `database_config` | `dict` | `PostgresLoader` (lấy retry, delay) |
+| `alert_thresholds` | `dict` | `bot_services.py` (UX/UI format), `alert_job.py` (query DB) |
+| `telegram_bot_config` | `dict` | `telegram_bot.py` (build menu chọn Quận) |
+| `alert_job_config` | `dict` | `alert_job.py` (lọc khu vực phát thanh cảnh báo) |
 
-### Cơ chế Fallback (Phòng thủ)
-Nếu `config_runtime_constant.json` bị mất hoặc JSON lỗi cú pháp, `ConfigManager` **không crash**. Nó tự dùng giá trị mặc định an toàn:
+### Cơ chế Fallback (Phòng thủ & Zero Hardcode)
+Nếu `config_runtime_constant.json` bị mất hoặc JSON lỗi cú pháp, `ConfigManager` **không crash**, nhưng nó tuyệt đối **KHÔNG** tự ý "chế" ra giá trị mặc định (Zero Hardcode). Nó sẽ trả về Dictionary rỗng `{}`:
 ```python
-except FileNotFoundError:
-    self._config = {
-        "api": {"max_retries": 3, "backoff_factor": 1, "timeout_sec": 10},
-        "database": {"max_retries": 3, "retry_delay_sec": 5}
-    }
+except Exception as e:
+    logger.error(f"Failed to load config at {config_path}: {e}. Returning empty configurations.")
+    self._config = {}
 ```
+Việc xử lý Config được thiết kế theo mô hình **HYBRID (Lai tạo)** kết hợp giữa **Resilience (Kiên cường)** và **Fail-Fast (Chết sớm)**:
+
+1. **Với tham số Kỹ thuật (Technical Params):** Dùng `.get("key", default)`. Ví dụ: `timeout`, `max_retries`. Nếu file cấu hình mất, hệ thống tự lui về fallback an toàn (VD: 3 lần thử lại, timeout 10s) để đảm bảo Core Pipeline vẫn hoạt động bình thường, không bao giờ để Data Pipeline chết vì mấy tham số lặt vặt.
+2. **Với tham số Nghiệp vụ (Business/Structural Params):** Dùng `["key"]` (Fail-fast). Ví dụ: `districts` trong Bot, hoặc `target_region_prefix`. Nếu thiếu cấu hình này, UI không thể render, hoặc logic cốt lõi bị sai lệch. Hệ thống sẽ văng lỗi `KeyError` ngay lập tức để cảnh báo DevOps.
 
 ### Import sẵn instance global
 ```python
@@ -106,7 +124,11 @@ config_manager = ConfigManager()  # Singleton được khởi tạo khi module �
 ```python
 from src.utils.config_manager import config_manager  # Import thẳng object, không phải class
 
+# Cách 1 (Resilient): Cho tham số kỹ thuật
 timeout = config_manager.api_config.get("timeout_sec", 10)
+
+# Cách 2 (Fail-fast): Cho tham số nghiệp vụ trọng yếu
+prefix = config_manager.alert_job_config["target_region_prefix"]
 ```
 
 ---

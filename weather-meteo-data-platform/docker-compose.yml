@@ -82,6 +82,26 @@ services:
         wait -n
       "
 
+  telegram_bot:
+    container_name: telegram_bot_container
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres_db
+      POSTGRES_PORT: 5432
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      RUNNING_IN_DOCKER: "true"
+    volumes:
+      - ./src:/opt/airflow/src
+      - ./.env:/opt/airflow/.env:ro
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - meteo_network
+    restart: unless-stopped
+    command: bash -c "python3 /opt/airflow/src/scripts/telegram_bot.py"
+
   redis:
     image: redis:7
     restart: unless-stopped

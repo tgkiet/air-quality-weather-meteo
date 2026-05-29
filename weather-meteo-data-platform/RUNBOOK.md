@@ -22,7 +22,7 @@ docker compose up -d --build
 ## 2. NẠP DỮ LIỆU LỊCH SỬ (Data Backfill)
 
 **2.1. Làm sạch dữ liệu cũ (Tùy chọn)**
-Để đập đi xây lại data **KHÔNG mất Dashboard Superset**, chạy lệnh làm trống các bảng gốc:
+Để đập đi xây lại data **KHÔNG mất dữ liệu Dashboard Superset**, chạy lệnh làm trống các bảng gốc:
 ```bash
 source .env && docker exec -it postgres_container psql -U "$POSTGRES_USER" -d air_quality_db -c "TRUNCATE TABLE bronze_historical_weather, api_openmeteo_raw_data, silver_layer.alert_history CASCADE;"
 ```

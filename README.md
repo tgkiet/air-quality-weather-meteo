@@ -50,10 +50,26 @@ Hệ thống cung cấp giải pháp toàn diện với:
 │   location_name · forecast_time · weather · AQ · alerts     │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
-                 Apache Superset Dashboard
-```
+┌─────────────────────────────────────────────────────────────┐
+│                  CONSUMPTION / SERVING LAYER              │
+│  Apache Superset (Trực quan hóa Dashboard)                  │
+│  Telegram Interactive Bot (Pull: Tra cứu /weather, /aqi)    │
+│  Alert Job Broadcast:                                       │
+│   ├─ 06:00 Bản tin Sáng: Quét toàn bộ ngày hôm nay          │
+│   ├─ 20:00 Bản tin Tối: Quét toàn bộ ngày mai               │
+│   └─ Khẩn cấp (giờ khác): Quét đột xuất 6 giờ tới           │
+└─────────────────────────────────────────────────────────────┘
 
 **Stack:** Python · Apache Airflow 3.2.0 · dbt 1.9.0 · PostgreSQL 16 · Docker Compose
+
+---
+
+## 🤖 Consumption Layer (Telegram Bot & Alert)
+
+Hệ thống giao tiếp với người dùng qua 3 kịch bản Push Notification chính:
+- **Bản tin Sáng (06:00 - AQI):** Cảnh báo ô nhiễm không khí (bụi mịn PM2.5) cho **toàn bộ ngày hôm nay**, giúp người dùng chuẩn bị khẩu trang trước khi đi làm.
+- **Bản tin Tối (20:00 - Mưa Lớn):** Tổng hợp rủi ro mưa lớn cho **toàn bộ ngày mai**, giúp người dùng lên kế hoạch lịch trình.
+- **Cảnh báo Đột xuất (Mưa Khẩn Cấp):** Các giờ còn lại, hệ thống liên tục quét trước **cửa sổ 6 giờ tới (từ thời điểm hiện tại)** để phát hiện mưa bất chợt. Tích hợp cơ chế **Stateful Deduplication**, đảm bảo cảnh báo khẩn cấp chỉ kích hoạt **đúng 1 lần** cho 1 cơn mưa, chống spam tuyệt đối.
 
 ---
 
@@ -87,11 +103,11 @@ air-quality-weather-meteo/
     │
     ├──  src/                         ← Extract & Load Layer
     │   ├──  README.md
-    │   ├── config/config.json          ← 52 locations + API config
+    │   ├── config/                     ← config.json & config_runtime_constant.json
     │   ├── extractors/open_meteo.py    ← Session + Retry + Data Contract
     │   ├── loaders/                    ← PostgresLoader
-    │   ├── scripts/                    ← init_dbs.sh, backfill_history.py, alert_job.py
-    │   ├── utils/                      ← Logger + ConfigManager
+    │   ├── scripts/                    ← telegram_bot.py, alert_job.py, backfill_history.py
+    │   ├── utils/                      ← ConfigManager (Hybrid Fail-Fast/Resilient)
     │   └── main.py                     ← ELT entrypoint
     │
     ├──  airflow/                     ← Orchestration Layer
@@ -168,7 +184,7 @@ docker exec airflow_container \
 | **UNION ALL safety** | Explicit column list (đúng thứ tự) ở cả hai bên |
 | **NULL safety** | `IS NULL` guard tường minh trước mọi CASE comparison |
 | **Fail-fast** | `raise` thay vì `return` → Airflow nhận đúng FAILED signal |
-| **No hardcoding** | Locations → `config.json`, credentials → `.env` |
+| **Zero Hardcode** | Configurations nằm toàn bộ trong JSON (Hybrid: Fail-Fast cho cấu trúc, Resilient cho mạng) |
 
 ---
 

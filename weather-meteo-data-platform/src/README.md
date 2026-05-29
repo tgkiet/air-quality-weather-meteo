@@ -12,7 +12,7 @@ src/
 │
 ├── config/
 │   ├── config.json                  # Cấu hình 52 locations + API params
-│   └── config_runtime_constant.json # timeout, max_retries, retry_delay
+│   └── config_runtime_constant.json # Bot UI/UX config, thresholds, districts
 │
 ├── extractors/
 │   └── open_meteo.py                # OpenMeteoExtractor (Session, Retry, Contract)
@@ -23,8 +23,10 @@ src/
 │
 ├── scripts/
 │   ├── init_dbs.sh                  # Khởi tạo DB, tables, UNIQUE constraints
-│   ├── alert_job.py                 # Truy vấn cảnh báo thời tiết và gửi Telegram
-│   └── backfill_history.py      # Backfill lịch sử từ Archive API (argparse)
+│   ├── backfill_history.py          # Backfill lịch sử từ Archive API
+│   ├── telegram_bot.py              # Controller: Lõi Interactive Pull Bot
+│   ├── bot_services.py              # Service/Formatter: Xử lý UX & Formatting
+│   └── alert_job.py                 # Lõi Push: Broadcast & Stateful Deduplication
 │
 └── utils/
     ├── config_manager.py            # ConfigManager Singleton
@@ -82,6 +84,11 @@ python src/main.py --execution_date "2026-05-27T04:00:00+00:00"
 Chạy tự động khi Postgres container khởi tạo lần đầu. Tạo:
 - `api_openmeteo_raw_data` + `UNIQUE(source_type, execution_date)`
 - `bronze_historical_weather` + `UNIQUE(datetime, lat, lon)` + cột `location_name`
+
+### Kiến trúc Dual-Core Telegram Bot
+- **`telegram_bot.py`**: Lõi Pull (Interactive). Quản lý Keyboard, Handler lệnh `/weather`, `/aqi`. Tách biệt hoàn toàn DB logic.
+- **`bot_services.py`**: Chứa `BotDatabaseManager` và `BotFormatter`. Định dạng số liệu thô thành ngôn ngữ tự nhiên (Max-Ping UX). Xử lý "0.0mm Paradox".
+- **`alert_job.py`**: Lõi Push (Cronjob). Chạy bản tin 06:00, 20:00 và khẩn cấp (6H window). Có cơ chế **Stateful Deduplication** (lưu `silver_layer.alert_history`) để chống spam.
 
 ### backfill_history.py
 ```bash

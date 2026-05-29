@@ -24,20 +24,14 @@ class ConfigManager:
         
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
-                self._config = json.load(f)
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    raise ValueError("JSON root must be a dictionary.")
+                self._config = data
             logger.info("Successfully loaded runtime configurations.")
-        except FileNotFoundError:
-            logger.warning(f"Config file not found at {config_path}. Using default values.")
-            self._config = {
-                "api": {"max_retries": 3, "backoff_factor": 1, "timeout_sec": 10},
-                "database": {"max_retries": 3, "retry_delay_sec": 5}
-            }
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing config file: {e}. Using default values.")
-            self._config = {
-                "api": {"max_retries": 3, "backoff_factor": 1, "timeout_sec": 10},
-                "database": {"max_retries": 3, "retry_delay_sec": 5}
-            }
+        except Exception as e:
+            logger.error(f"Failed to load config at {config_path}: {e}. Returning empty configurations.")
+            self._config = {}
 
     @property
     def api_config(self) -> dict:
@@ -46,6 +40,18 @@ class ConfigManager:
     @property
     def database_config(self) -> dict:
         return self._config.get("database", {})
+
+    @property
+    def telegram_bot_config(self) -> dict:
+        return self._config.get("telegram_bot", {})
+
+    @property
+    def alert_thresholds(self) -> dict:
+        return self._config.get("alert_thresholds", {})
+
+    @property
+    def alert_job_config(self) -> dict:
+        return self._config.get("alert_job", {})
 
 # Khởi tạo sẵn một object để các class khác import và sử dụng trực tiếp
 config_manager = ConfigManager()

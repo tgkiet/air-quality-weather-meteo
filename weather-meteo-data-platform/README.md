@@ -36,8 +36,15 @@
 │    location_name | forecast_time | weather | AQ | alert_flags        │
 └──────────────────────────────────────────────────────────────────────┘
                              ▼
-                    Apache Superset Dashboard
-```
+ ┌────────────────────────────────────────────────────────────┐
+ │                  CONSUMPTION / SERVING LAYER               │
+ │  Apache Superset Dashboard (Trực quan hóa)                 │
+ │  Telegram Interactive Bot (Pull: Tra cứu /weather, /aqi)   │
+ │  Alert Job Broadcast:                                       │
+ │   ├─ 06:00 Bản tin Sáng: Quét toàn bộ ngày hôm nay          │
+ │   ├─ 20:00 Bản tin Tối: Quét toàn bộ ngày mai               │
+ │   └─ Khẩn cấp (giờ khác): Quét đột xuất 6 giờ tới           │
+ └────────────────────────────────────────────────────────────┘
 
 ---
 
@@ -51,6 +58,7 @@
 | Transform | dbt-core | 1.9.0 | LATERAL unnest, DISTINCT ON dedup, LEFT JOIN |
 | Infrastructure | Docker Compose | 2.x | Healthcheck, service dependency, DRY YAML anchors |
 | Visualization | Apache Superset | 6.1.0 | 5-Container Architecture (App, Init, Worker, Beat, Redis) |
+| Alerting & UI | pyTelegramBotAPI | 4.20.0 | Dual-Core Bot (Interactive Pull + Stateful Push), Max-Ping UX |
 
 ---
 
@@ -84,7 +92,10 @@ Airflow logical_date ──► main.py --execution_date {logical_date}
               ──► 2 Silver INCREMENTAL (DISTINCT ON, execution_date == var)
               ──► 1 Gold TABLE (LEFT JOIN, derived metrics)
     dbt test ──► 29 data quality tests (PASS/FAIL)
-    alert_job ─► Đẩy cảnh báo thời tiết/không khí qua Telegram
+
+    ↓ (Consumption Layer)
+    alert_job.py    ─► Push: Stateful cronjob báo cáo sáng/tối & Cảnh báo khẩn
+    telegram_bot.py ─► Pull: Interactive Bot phục vụ truy vấn On-demand của user
 ```
 
 ### Backfill Pipeline (Chạy 1 lần)
@@ -160,9 +171,20 @@ docker exec airflow_container bash -c \
 | **Timezone Safety** | `AT TIME ZONE 'Asia/Bangkok'` explicit ở Python và SQL |
 | **NULL Safety** | Guard `IS NULL` tường minh trước mọi so sánh số trong CASE |
 | **UNION ALL Safety** | Explicit column list (đúng thứ tự) trong cả hai bên UNION ALL |
-| **No Hardcoding** | Locations → `config.json`, credentials → `.env` |
+| **Zero Hardcode** | Configurations nằm toàn bộ trong JSON (Hybrid: Fail-Fast cho cấu trúc, Resilient cho mạng) |
 | **Data Contract** | Validate `expected_keys` trước khi load — không load JSON thiếu field |
 | **RBAC Ready** | `gold_layer` schema riêng, phân quyền dễ dàng qua PostgreSQL GRANT |
+
+---
+
+## Kiến trúc Dual-Core Telegram Bot
+Hệ thống sử dụng Bot Telegram làm giao diện người dùng cuối (Consumption Layer) với các chuẩn mực khắt khe:
+- **Strict OOP**: Tách biệt hoàn toàn Controller (`telegram_bot.py`), Service/Formatter (`bot_services.py`), và DB Manager.
+- **Zero Hardcode**: Toàn bộ mốc cảnh báo (VD: Mưa >2.0mm, PM2.5 >55), danh sách Quận, và Prefix khu vực được khóa trong `config_runtime_constant.json` và nạp qua Singleton `ConfigManager`.
+- **Max-Ping UX**: Thuật ngữ nhân tính hóa, xử lý triệt để "0.0mm Paradox" (không mưa thì ẩn xác suất gây nhiễu), layout căn lề chuẩn Micro-Dashboard.
+- **Bản tin Sáng (06:00 - AQI)**: Cảnh báo ô nhiễm không khí (bụi mịn PM2.5) cho **toàn bộ ngày hôm nay**, giúp người dùng chuẩn bị khẩu trang trước khi đi làm.
+- **Bản tin Tối (20:00 - Mưa Lớn)**: Tổng hợp rủi ro mưa lớn cho **toàn bộ ngày mai**, giúp người dùng lên kế hoạch lịch trình.
+- **Cảnh báo Đột xuất (Mưa Khẩn Cấp)**: Các giờ còn lại, `alert_job.py` liên tục quét trước **cửa sổ 6 giờ tới (tính từ thời điểm hiện tại)** để phát hiện mưa bất chợt. Tích hợp cơ chế **Stateful Deduplication** (ghi nhận trạng thái vào `silver_layer.alert_history`), đảm bảo cảnh báo khẩn cấp chỉ kích hoạt **đúng 1 lần** cho 1 cơn mưa, chống spam tuyệt đối.
 
 ---
 
@@ -175,16 +197,23 @@ weather-meteo-data-platform/
 ├── .env                        # không commit Git
 │
 ├── src/
-│   ├── config/config.json      # 52 locations + API URLs/params
+│   ├── config/
+│   │   ├── config.json                  # 52 locations + API URLs
+│   │   └── config_runtime_constant.json # Cấu hình UI/UX cho Bot (Zero hardcode)
 │   ├── extractors/open_meteo.py
 │   ├── loaders/
-│   │   ├── base_loader.py      # Connection pooling
+│   │   ├── base_loader.py      # Connection pooling (OOP)
 │   │   ├── postgres_loader.py  # UPSERT realtime data
 │
 │   ├── scripts/
 │   │   ├── init_dbs.sh         # Tạo tables + UNIQUE constraints
-│   │   └── backfill_history.py  # --start-date, --end-date
-│   ├── utils/logger.py
+│   │   ├── backfill_history.py # Tự động fetch lịch sử
+│   │   ├── telegram_bot.py     # Lõi Pull: Giao tiếp tương tác qua Telegram
+│   │   ├── alert_job.py        # Lõi Push: Phát thanh & Stateful Deduplication
+│   │   └── bot_services.py     # Centralized formatting & UX logic
+│   ├── utils/
+│   │   ├── config_manager.py   # Singleton config loader (Hybrid Fail-Fast/Resilient)
+│   │   └── logger.py
 │   └── main.py                 # ELT entrypoint (--execution_date)
 │
 ├── airflow/                     

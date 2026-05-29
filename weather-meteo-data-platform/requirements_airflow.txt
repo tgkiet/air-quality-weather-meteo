@@ -12,3 +12,4 @@ requests==2.32.3
 # Version 1.9.0 phải khớp với image dbt_container: ghcr.io/dbt-labs/dbt-postgres:1.9.latest
 dbt-core==1.9.0
 dbt-postgres==1.9.0
+pyTelegramBotAPI==4.20.0

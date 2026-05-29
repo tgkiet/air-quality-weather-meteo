@@ -7,5 +7,39 @@
   "database": {
     "max_retries": 3,
     "retry_delay_sec": 5
+  },
+  "alert_thresholds": {
+    "rain_probability_pct": 80,
+    "rain_mm": 2.0,
+    "pm25_alert_ugm3": 55.0
+  },
+  "telegram_bot": {
+    "districts": [
+      {"label": "Quan 1",      "db_name": "HCM Quận 1"},
+      {"label": "Quan 3",      "db_name": "HCM Quận 3"},
+      {"label": "Quan 4",      "db_name": "HCM Quận 4"},
+      {"label": "Quan 5",      "db_name": "HCM Quận 5"},
+      {"label": "Quan 6",      "db_name": "HCM Quận 6"},
+      {"label": "Quan 7",      "db_name": "HCM Quận 7"},
+      {"label": "Quan 8",      "db_name": "HCM Quận 8"},
+      {"label": "Quan 10",     "db_name": "HCM Quận 10"},
+      {"label": "Quan 11",     "db_name": "HCM Quận 11"},
+      {"label": "Quan 12",     "db_name": "HCM Quận 12"},
+      {"label": "Tan Binh",    "db_name": "HCM Quận Tân Bình"},
+      {"label": "Binh Tan",    "db_name": "HCM Quận Bình Tân"},
+      {"label": "Binh Thanh",  "db_name": "HCM Quận Bình Thạnh"},
+      {"label": "Tan Phu",     "db_name": "HCM Quận Tân Phú"},
+      {"label": "Go Vap",      "db_name": "HCM Quận Gò Vấp"},
+      {"label": "Phu Nhuan",   "db_name": "HCM Quận Phú Nhuận"},
+      {"label": "Thu Duc",     "db_name": "HCM Thành phố Thủ Đức"},
+      {"label": "Binh Chanh",  "db_name": "HCM Huyện Bình Chánh"},
+      {"label": "Hoc Mon",     "db_name": "HCM Huyện Hóc Môn"},
+      {"label": "Cu Chi",      "db_name": "HCM Huyện Củ Chi"},
+      {"label": "Nha Be",      "db_name": "HCM Huyện Nhà Bè"},
+      {"label": "Can Gio",     "db_name": "HCM Huyện Cần Giờ"}
+    ]
+  },
+  "alert_job": {
+    "target_region_prefix": "HCM "
   }
 }
