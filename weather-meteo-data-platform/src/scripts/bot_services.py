@@ -137,7 +137,7 @@ class BotDatabaseManager:
                     temperature_level
                 FROM gold_layer.mart_hourly_conditions
                 WHERE location_name = %s
-                  AND forecast_time >= (NOW() AT TIME ZONE 'Asia/Bangkok') + CAST(%s AS INTERVAL)
+                  AND forecast_time >= NOW() + CAST(%s AS INTERVAL)
                 ORDER BY forecast_time ASC
                 LIMIT %s;
             """
@@ -147,11 +147,8 @@ class BotDatabaseManager:
                     cur.execute(sql, (db_name, interval_str, limit))
                     rows = cur.fetchall()
             
-            # Slicing to maintain ~6 rows output for optimal UX
-            if limit == 12:
-                return rows[::2]
-            elif limit == 24:
-                return rows[::4]
+            # Loại bỏ cơ chế slicing (rows[::2], rows[::4]) theo yêu cầu
+            # để hiển thị đầy đủ chi tiết từng giờ.
             return rows
         except Exception as e:
             logger.error(f"Error query_weather: {e}")
@@ -171,7 +168,7 @@ class BotDatabaseManager:
                 FROM gold_layer.mart_hourly_conditions
                 WHERE location_name = %s
                   AND pm2_5 IS NOT NULL
-                  AND forecast_time <= (NOW() AT TIME ZONE 'Asia/Bangkok') + INTERVAL '1 hour'
+                  AND forecast_time <= NOW() + INTERVAL '1 hour'
                 ORDER BY forecast_time DESC
                 LIMIT 1;
             """
@@ -199,9 +196,9 @@ class BotFormatter:
         
         time_desc_en = f"Next {limit} hours"
         time_desc_vi = f"{limit} giờ tới"
-        if offset == 24:
-            time_desc_en = "Tomorrow (24-48h)"
-            time_desc_vi = "Ngày mai (24-48h)"
+        if offset > 0:
+            time_desc_en = f"Hours +{offset} to +{offset+limit}"
+            time_desc_vi = f"Dự báo từ giờ thứ {offset} đến {offset+limit}"
         
         title = f"WEATHER FORECAST · {label.upper()}\nUpdated {now}  |  {time_desc_en}\n{sep}" if lang == "en" else \
                 f"DỰ BÁO THỜI TIẾT · {label.upper()}\nCập nhật {now}  |  {time_desc_vi}\n{sep}"
@@ -227,14 +224,17 @@ class BotFormatter:
                 
                 if rain > 0:
                     if rain > self.rain_mm_threshold and prob >= self.rain_prob_threshold:
-                        rain_desc, alert = "Heavy rain", " [!! ALERT !!]"
+                        rain_desc, alert = "Heavy rain", " [!! 🚨 ALERT 🚨 !!]"
+                        rain_icon = "⛈️"
                     elif rain > self.rain_mm_threshold:
                         rain_desc, alert = "Moderate rain", ""
+                        rain_icon = "🌧️"
                     else:
                         rain_desc, alert = "Light rain", ""
-                    rain_text = f"{rain_desc} ({rain:.1f} mm) | Chance of rain: {prob}%{alert}"
+                        rain_icon = "🌦️"
+                    rain_text = f"{rain_icon} {rain_desc} ({rain:.1f} mm) | Chance of rain: {prob}%{alert}"
                 else:
-                    rain_text = "No rain expected"
+                    rain_text = "🌤️ No rain expected"
                 
                 lines += [
                     f"\n{t_str}",
@@ -248,14 +248,17 @@ class BotFormatter:
 
                 if rain > 0:
                     if rain > self.rain_mm_threshold and prob >= self.rain_prob_threshold:
-                        rain_desc, alert = "Mưa lớn", " [!! CẢNH BÁO !!]"
+                        rain_desc, alert = "Mưa lớn", " [!! 🚨 CẢNH BÁO 🚨 !!]"
+                        rain_icon = "⛈️"
                     elif rain > self.rain_mm_threshold:
                         rain_desc, alert = "Mưa vừa", ""
+                        rain_icon = "🌧️"
                     else:
                         rain_desc, alert = "Mưa nhỏ", ""
-                    rain_text = f"{rain_desc} ({rain:.1f} mm) | Tỉ lệ có mưa: {prob}%{alert}"
+                        rain_icon = "🌦️"
+                    rain_text = f"{rain_icon} {rain_desc} ({rain:.1f} mm) | Tỉ lệ có mưa: {prob}%{alert}"
                 else:
-                    rain_text = "Không mưa"
+                    rain_text = "🌤️ Không mưa"
                 
                 lines += [
                     f"\n{t_str}",

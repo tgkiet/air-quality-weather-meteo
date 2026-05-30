@@ -70,16 +70,21 @@ class WeatherAlerterJob(BasePostgresLoader):
             time_range = f"{start_time} - {end_time}" if start_time != end_time else f"{start_time}"
             
             if alert_type == "RAIN":
-                max_prob = max(r['precipitation_probability'] for r in rows)
-                max_rain = max(float(r['precipitation']) for r in rows)
+                max_rain_record = max(rows, key=lambda r: float(r['precipitation']))
+                max_rain = float(max_rain_record['precipitation'])
+                max_prob = max_rain_record['precipitation_probability']
+                peak_time = max_rain_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
+                
                 rain_type = "Mưa lớn" if max_rain >= 5.0 else "Mưa vừa"
-                icon = "⛈️" if max_rain >= 5.0 else "🌧️"
-                message_lines.append(f"{icon} {loc} ({time_range}) | {rain_type} ({max_rain:.1f} mm) | Tỉ lệ: <b>{max_prob}%</b>")
+                message_lines.append(f"[Mưa] {loc} ({time_range}) | Đỉnh điểm lúc {peak_time} ({max_rain:.1f} mm, Tỉ lệ: <b>{max_prob}%</b>)")
             elif alert_type == "AQI":
-                max_pm25 = max(r['pm2_5'] for r in rows)
-                level = rows[0]['pm2_5_level']
+                max_aq_record = max(rows, key=lambda r: float(r['pm2_5']))
+                max_pm25 = float(max_aq_record['pm2_5'])
+                level = max_aq_record['pm2_5_level']
+                peak_time = max_aq_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
+                
                 alert_tag = "[CẢNH BÁO]" if "Nguy hiểm" in level or "Không lành mạnh" in level else "[THÔNG TIN]"
-                message_lines.append(f"{alert_tag} <b>{loc}</b> | PM2.5: {float(max_pm25):.1f} µg/m³ ({level})")
+                message_lines.append(f"{alert_tag} <b>{loc}</b> | Xấu nhất lúc {peak_time} (PM2.5: {max_pm25:.1f} µg/m³ - {level})")
 
             # Chuẩn bị dữ liệu ghi lịch sử (nếu là dạng khẩn cấp chống spam)
             if is_stateful:
@@ -92,8 +97,8 @@ class WeatherAlerterJob(BasePostgresLoader):
         # 3. Chia nhỏ tin nhắn nếu quá dài (Bảo vệ lỗi 4096 chars của Telegram)
         final_message = "\n".join(message_lines)
         if len(final_message) > 4000:
-            import re
-            clean_text = re.sub('<[^<]+>', '', final_message)
+            # Loại bỏ các thẻ HTML an toàn thay vì dùng Regex gây mất dữ liệu
+            clean_text = final_message.replace('<b>', '').replace('</b>', '').replace('<i>', '').replace('</i>', '')
             final_message = clean_text[:4000] + "...\n(Tin nhan qua dai, da bi cat phan cuoi)"
 
         success = self.alerter.send_message(final_message)
@@ -133,8 +138,8 @@ class WeatherAlerterJob(BasePostgresLoader):
             SELECT location_name, forecast_time, precipitation_probability, precipitation,
                    pm2_5, pm2_5_level, is_air_quality_alert, weather_uv_index, apparent_temperature
             FROM gold_layer.mart_hourly_conditions
-            WHERE forecast_time >= ((%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')::DATE + CAST(%s AS INTERVAL))
-              AND forecast_time < ((%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')::DATE + CAST(%s AS INTERVAL))
+            WHERE forecast_time >= (((%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')::DATE + CAST(%s AS INTERVAL)) AT TIME ZONE 'Asia/Bangkok')
+              AND forecast_time < (((%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')::DATE + CAST(%s AS INTERVAL)) AT TIME ZONE 'Asia/Bangkok')
               AND location_name LIKE %s
             ORDER BY location_name ASC, forecast_time ASC;
         """
@@ -150,7 +155,7 @@ class WeatherAlerterJob(BasePostgresLoader):
             
         if not records:
             logger.info(f"No records found for {window_name}.")
-            msg = f"<b>{title}</b>\n=============================\n🌈 Thời tiết lý tưởng, không có dữ liệu để cảnh báo rủi ro.\nChúc bạn một ngày tuyệt vời!\n=============================\n<i>(Hệ thống tự động)</i>"
+            msg = f"<b>{title}</b>\n=============================\nThời tiết lý tưởng, không có dữ liệu để cảnh báo rủi ro.\nChúc bạn một ngày tuyệt vời!\n=============================\n<i>(Hệ thống tự động)</i>"
             self.alerter.send_message(msg)
             return
             
@@ -164,11 +169,14 @@ class WeatherAlerterJob(BasePostgresLoader):
                 start_time = rain_records[0]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
                 end_time = rain_records[-1]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
                 t_str = f" ({start_time}-{end_time})" if start_time != end_time else f" ({start_time})"
-                max_rain = max(float(r['precipitation']) for r in rain_records)
-                max_prob = max(r['precipitation_probability'] for r in rain_records)
+                
+                max_rain_record = max(rain_records, key=lambda x: float(x['precipitation']))
+                max_rain = float(max_rain_record['precipitation'])
+                max_prob = max_rain_record['precipitation_probability']
+                peak_time = max_rain_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
+                
                 rain_type = "Mưa lớn" if max_rain >= 5.0 else "Mưa vừa"
-                icon = "⛈️" if max_rain >= 5.0 else "🌧️"
-                alerts[loc].append(f"{icon} {rain_type}{t_str}: {max_rain:.1f}mm, Tỉ lệ {max_prob}%")
+                alerts[loc].append(f"[Mưa] {rain_type}{t_str}: To nhất lúc {peak_time} ({max_rain:.1f}mm, Tỉ lệ {max_prob}%)")
                 
             # AQI
             aqi_records = [r for r in loc_records if r['is_air_quality_alert']]
@@ -176,9 +184,13 @@ class WeatherAlerterJob(BasePostgresLoader):
                 start_time = aqi_records[0]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
                 end_time = aqi_records[-1]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
                 t_str = f" ({start_time}-{end_time})" if start_time != end_time else f" ({start_time})"
-                max_pm25 = max(float(r['pm2_5']) for r in aqi_records)
-                level = aqi_records[0]['pm2_5_level']
-                alerts[loc].append(f"😷 Bụi mịn{t_str}: PM2.5 {max_pm25:.1f} ({level})")
+                
+                max_aq_record = max(aqi_records, key=lambda x: float(x['pm2_5']))
+                max_pm25 = float(max_aq_record['pm2_5'])
+                max_level = max_aq_record['pm2_5_level']
+                peak_time = max_aq_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
+                
+                alerts[loc].append(f"[Bụi mịn]{t_str}: Đỉnh điểm lúc {peak_time} (PM2.5: {max_pm25:.1f} - {max_level})")
                 
             # UV & Heat
             heat_records = [r for r in loc_records if (r['apparent_temperature'] is not None and r['apparent_temperature'] >= heat_alert) or (r['weather_uv_index'] is not None and r['weather_uv_index'] >= uv_alert)]
@@ -186,16 +198,43 @@ class WeatherAlerterJob(BasePostgresLoader):
                 start_time = heat_records[0]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
                 end_time = heat_records[-1]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
                 t_str = f" ({start_time}-{end_time})" if start_time != end_time else f" ({start_time})"
-                max_uv = max((float(r['weather_uv_index']) for r in heat_records if r['weather_uv_index'] is not None), default=0.0)
-                max_temp = max((float(r['apparent_temperature']) for r in heat_records if r['apparent_temperature'] is not None), default=0.0)
-                alerts[loc].append(f"🌞 Nắng gắt{t_str}: Cảm giác {max_temp:.1f}°C, UV {max_uv:.1f}")
+                
+                max_temp_record = max([r for r in heat_records if r['apparent_temperature'] is not None], key=lambda x: float(x['apparent_temperature']), default=None)
+                max_uv_record = max([r for r in heat_records if r['weather_uv_index'] is not None], key=lambda x: float(x['weather_uv_index']), default=None)
+                
+                insight_parts = []
+                if max_temp_record and float(max_temp_record['apparent_temperature']) >= heat_alert:
+                    t_peak = max_temp_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
+                    insight_parts.append(f"Đỉnh nóng {t_peak} (Cảm giác {float(max_temp_record['apparent_temperature']):.1f}°C)")
+                
+                if max_uv_record and float(max_uv_record['weather_uv_index']) >= uv_alert:
+                    uv_peak = max_uv_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
+                    insight_parts.append(f"UV cực đại {uv_peak} ({float(max_uv_record['weather_uv_index']):.1f})")
+                
+                alerts[loc].append(f"[Nắng gắt]{t_str}: " + ", ".join(insight_parts))
 
         if not alerts:
-            msg = f"<b>{title}</b>\n=============================\n🌈 Thời tiết lý tưởng, không có cảnh báo rủi ro (Mưa lớn/Bụi mịn/Nắng gắt).\nChúc bạn một ngày tuyệt vời!\n=============================\n<i>(Hệ thống tự động)</i>"
+            msg = f"<b>{title}</b>\n=============================\nThời tiết lý tưởng, không có cảnh báo rủi ro (Mưa lớn/Bụi mịn/Nắng gắt).\nChúc bạn một ngày tuyệt vời!\n=============================\n<i>(Hệ thống tự động)</i>"
             self.alerter.send_message(msg)
             return
             
         message_lines = [f"<b>{title}</b>", "============================="]
+        
+        # Generate Global Insight
+        has_rain = any("[Mưa]" in a for loc_alerts in alerts.values() for a in loc_alerts)
+        has_aqi = any("[Bụi mịn]" in a for loc_alerts in alerts.values() for a in loc_alerts)
+        has_heat = any("[Nắng gắt]" in a for loc_alerts in alerts.values() for a in loc_alerts)
+        
+        insights = []
+        if has_rain: insights.append("mang theo đồ che mưa")
+        if has_aqi: insights.append("đeo khẩu trang N95")
+        if has_heat: insights.append("hạn chế ra đường giữa trưa nắng gắt")
+        
+        if insights:
+            insight_msg = f"<b>LỜI KHUYÊN:</b> Hôm nay hãy nhớ " + ", ".join(insights) + " nhé!"
+            message_lines.append(insight_msg)
+            message_lines.append("=============================")
+
         for loc, loc_alerts in alerts.items():
             if not loc_alerts: continue
             short_loc = loc.replace("Thành phố ", "TP.").replace("Thị xã ", "TX.").replace("Quận ", "Q.").replace("Huyện ", "H.")
@@ -208,8 +247,7 @@ class WeatherAlerterJob(BasePostgresLoader):
         
         final_message = "\n".join(message_lines)
         if len(final_message) > 4000:
-            import re
-            clean_text = re.sub('<[^<]+>', '', final_message)
+            clean_text = final_message.replace('<b>', '').replace('</b>', '').replace('<i>', '').replace('</i>', '')
             final_message = clean_text[:4000] + "...\n(Tin nhan qua dai, da bi cat phan cuoi)"
 
         self.alerter.send_message(final_message)
@@ -230,8 +268,8 @@ class WeatherAlerterJob(BasePostgresLoader):
                 ON g.location_name = ah.location_name 
                 AND g.forecast_time = ah.forecast_time 
                 AND ah.alert_type = 'RAIN'
-            WHERE g.forecast_time >= (%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')
-              AND g.forecast_time <= (%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok') + INTERVAL '6 hours'
+            WHERE g.forecast_time >= %s::TIMESTAMPTZ
+              AND g.forecast_time <= %s::TIMESTAMPTZ + INTERVAL '6 hours'
               AND g.precipitation >= %s 
               AND g.precipitation_probability >= %s
               AND g.location_name LIKE %s

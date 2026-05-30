@@ -38,7 +38,7 @@ class TelegramInteractiveBot(BasePostgresLoader):
         if not self.bot_token:
             raise ValueError("TELEGRAM_BOT_TOKEN is not configured in environment.")
 
-        self.bot = telebot.TeleBot(self.bot_token, parse_mode=None)
+        self.bot = telebot.TeleBot(self.bot_token, parse_mode=None, num_threads=10)
         bkk_tz = ZoneInfo("Asia/Bangkok")
 
         bot_cfg    = config_manager.telegram_bot_config
@@ -169,16 +169,16 @@ class TelegramInteractiveBot(BasePostgresLoader):
         city_prefix = db_name.split(" ")[0]
         if lang == "en":
             kb.add(
-                InlineKeyboardButton("🕒 Next 6 Hours (Detailed)", callback_data=f"show_wx{_CB_SEP}6{_CB_SEP}0{_CB_SEP}{db_name}"),
-                InlineKeyboardButton("🕛 Next 12 Hours (Half-day)", callback_data=f"show_wx{_CB_SEP}12{_CB_SEP}0{_CB_SEP}{db_name}"),
-                InlineKeyboardButton("📅 Next 24 Hours (Full-day)", callback_data=f"show_wx{_CB_SEP}24{_CB_SEP}0{_CB_SEP}{db_name}"),
+                InlineKeyboardButton("Next 6 Hours", callback_data=f"show_wx{_CB_SEP}6{_CB_SEP}0{_CB_SEP}{db_name}"),
+                InlineKeyboardButton("Next 12 Hours", callback_data=f"show_wx{_CB_SEP}12{_CB_SEP}0{_CB_SEP}{db_name}"),
+                InlineKeyboardButton("Next 24 Hours", callback_data=f"show_wx{_CB_SEP}24{_CB_SEP}0{_CB_SEP}{db_name}"),
                 InlineKeyboardButton("<< Back", callback_data=f"weather{_CB_SEP}{city_prefix}")
             )
         else:
             kb.add(
-                InlineKeyboardButton("🕒 6 Giờ tới (Chi tiết)", callback_data=f"show_wx{_CB_SEP}6{_CB_SEP}0{_CB_SEP}{db_name}"),
-                InlineKeyboardButton("🕛 12 Giờ tới (Trọn buổi)", callback_data=f"show_wx{_CB_SEP}12{_CB_SEP}0{_CB_SEP}{db_name}"),
-                InlineKeyboardButton("📅 24 Giờ tới (Cả ngày)", callback_data=f"show_wx{_CB_SEP}24{_CB_SEP}0{_CB_SEP}{db_name}"),
+                InlineKeyboardButton("6 Giờ tới", callback_data=f"show_wx{_CB_SEP}6{_CB_SEP}0{_CB_SEP}{db_name}"),
+                InlineKeyboardButton("12 Giờ tới", callback_data=f"show_wx{_CB_SEP}12{_CB_SEP}0{_CB_SEP}{db_name}"),
+                InlineKeyboardButton("24 Giờ tới", callback_data=f"show_wx{_CB_SEP}24{_CB_SEP}0{_CB_SEP}{db_name}"),
                 InlineKeyboardButton("<< Quay lại", callback_data=f"city{_CB_SEP}weather{_CB_SEP}{city_prefix}")
             )
         return kb
@@ -187,15 +187,19 @@ class TelegramInteractiveBot(BasePostgresLoader):
         kb = InlineKeyboardMarkup(row_width=1)
         city_prefix = db_name.split(" ")[0]
         
-        # Pagination Logic for 24h limits
-        if limit == 24 and offset == 0:
-            next_btn = InlineKeyboardButton("➡️ Next 24h (Tomorrow)" if lang == "en" else "➡️ Xem 24h tiếp theo (Ngày mai)", 
-                                            callback_data=f"show_wx{_CB_SEP}24{_CB_SEP}24{_CB_SEP}{db_name}")
-            kb.add(next_btn)
-        elif limit == 24 and offset == 24:
-            prev_btn = InlineKeyboardButton("⬅️ Previous 24h (Today)" if lang == "en" else "⬅️ Xem 24h trước (Hôm nay)", 
-                                            callback_data=f"show_wx{_CB_SEP}24{_CB_SEP}0{_CB_SEP}{db_name}")
-            kb.add(prev_btn)
+        # Dynamic Pagination Logic (Preventing Telegram 4096 char limit)
+        nav_buttons = []
+        if offset >= limit:
+            nav_buttons.append(InlineKeyboardButton("<< Previous" if lang == "en" else "<< Xem trước", 
+                                            callback_data=f"show_wx{_CB_SEP}{limit}{_CB_SEP}{offset-limit}{_CB_SEP}{db_name}"))
+        
+        # Open-Meteo allows up to 7 days forecast, so offset < 72 is safe
+        if offset < 72:
+            nav_buttons.append(InlineKeyboardButton("Next >>" if lang == "en" else "Xem tiếp >>", 
+                                            callback_data=f"show_wx{_CB_SEP}{limit}{_CB_SEP}{offset+limit}{_CB_SEP}{db_name}"))
+            
+        if nav_buttons:
+            kb.row(*nav_buttons)
             
         if lang == "en":
             kb.add(

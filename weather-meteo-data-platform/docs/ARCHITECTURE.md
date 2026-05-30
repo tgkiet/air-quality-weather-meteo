@@ -172,7 +172,7 @@ Models dbt trong `models/marts/`:
             
         ▼ (Nếu dbt_test PASS)
 [BashOperator: alert_job]
-        │ bash_command: "python3 /opt/airflow/src/scripts/alert_job.py"
+        │ bash_command: "python3 /opt/airflow/src/scripts/alert_job.py --execution_date {{ logical_date }}"
         └── Lõi Push Bot (Dual-Core):
             ├── 06:00: Phát thanh "Bản tin Sáng" (Toàn bộ Rủi ro Hôm nay)
             ├── 20:00: Phát thanh "Bản tin Tối" (Toàn bộ Rủi ro Ngày mai)

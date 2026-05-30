@@ -33,8 +33,9 @@ class OpenMeteoExtractor:
         timeout_sec = config_manager.api_config.get("timeout_sec", 10)
         
         try:
-            # Dùng self.session thay vì requests.get độc lập
-            response = self.session.get(self.url, params=params, timeout=timeout_sec)
+            # Tối ưu 5: Dùng POST với URL-encoded data để tránh giới hạn HTTP 414 URI Too Long (2048 chars)
+            # Open-Meteo hoàn toàn hỗ trợ POST request cho API lấy dữ liệu.
+            response = self.session.post(self.url, data=params, timeout=timeout_sec)
             response.raise_for_status() 
             
             # Phân tách rõ quá trình lấy JSON ra khỏi quá trình lấy HTTP

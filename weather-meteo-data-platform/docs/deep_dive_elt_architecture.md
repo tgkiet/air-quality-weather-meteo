@@ -171,6 +171,18 @@ END AS is_weather_alert
 `is_air_quality_alert` có thể NULL vì AQ chỉ có 5 ngày. NULL ở đây có nghĩa "Chưa biết",
 khác hoàn toàn với FALSE nghĩa "Không có alert". Dashboard phải hiển thị "N/A" thay vì tick xanh.
 
+### Tầng Consumption — Dual-Core Telegram Bot
+
+Hệ thống cung cấp Data-as-a-Product thông qua Telegram Bot với kiến trúc hai lõi (Dual-Core) độc lập, đảm bảo Isolation và UX tối ưu:
+
+- **Pull Bot (`telegram_bot.py` - Lõi Tương Tác):** Phục vụ tra cứu On-demand.
+  - Sử dụng **Threaded Connection Pooling** để chịu tải.
+  - Áp dụng **State Editing (`edit_message_text`)** để ghi đè tin nhắn cũ, giữ khung chat luôn có đúng 1 tin nhắn duy nhất, dọn dẹp triệt để hiện tượng Spam màn hình.
+  - Tích hợp thuật toán Slicing In-Memory vượt rào giới hạn 4096 ký tự của API Telegram.
+- **Push Bot (`alert_job.py` - Lõi Cảnh Báo):** Phát thanh rủi ro tự động.
+  - Thiết kế **Stateful Deduplication**. Ngoài Bản tin Gộp Sáng (06:00) và Tối (20:00), bot sẽ liên tục quét rủi ro Đột Xuất (ví dụ: mưa lớn trong 6H tới).
+  - Mỗi khi phát cảnh báo, bot **ghi lại Trạng thái (State)** vào bảng `silver_layer.alert_history`. Lần quét sau nếu đã có lịch sử, bot sẽ im lặng. Đây là cốt lõi của tính năng **Chống SPAM Tuyệt Đối**.
+
 ---
 
 ## 3. OOP & Clean Code trong Python
@@ -201,6 +213,12 @@ config.json  ← 52 locations (30 HN + 22 HCM), API URLs, timeout, retry params
 .env         ← DB password, Airflow password (không bao giờ commit Git)
 .py files    ← Logic thuần túy, không có số ma thuật (magic number)
 ```
+
+### Zero Hardcode via Singleton Pattern & Hybrid Design
+
+Triết lý hệ thống là tách biệt hoàn toàn "Magic Numbers" (ngưỡng cảnh báo, cấu hình Bot) khỏi code. `ConfigManager` được thiết kế theo mẫu **Singleton** (đọc file `.json` đúng 1 lần duy nhất để tiết kiệm I/O) và sử dụng chiến lược **Hybrid**:
+- **Resilient (Kiên cường):** Với các tham số kỹ thuật (ví dụ `timeout_sec`), code dùng `.get("key", default)`. Nếu mất cấu hình, pipeline tự động lùi về giá trị fallback an toàn và tiếp tục chạy.
+- **Fail-Fast (Chết sớm):** Với các tham số nghiệp vụ trọng yếu (ví dụ `rain_mm`, danh sách Quận), code truy xuất cứng qua `dict["key"]`. Nếu thiếu, pipeline sẽ crash ngay lập tức (`KeyError`), đánh dấu FAILED để báo động DevOps thay vì lẳng lặng tính sai công thức.
 
 ### COPY EXPERT — Tại Sao Không Dùng INSERT Thông Thường?
 
@@ -413,6 +431,9 @@ luôn đúng kể cả khi có race condition.
 
 **`raise` thay vì `return None`:** Mọi exception ở tầng Extract/Load đều phải `raise`. Che giấu
 lỗi bằng `return None` là nguyên nhân số 1 của các bug khó debug trong pipeline.
+
+**Nỗi đau Nạp lại lịch sử (The Backfill Pain):** 
+Do dbt Silver Layer lọc Increment cực kỳ tối ưu dựa trên `execution_date` mới nhất, nếu bạn chạy script backfill độc lập để nạp dữ liệu cũ vào Bronze, Airflow ở lần chạy tiếp theo **sẽ không tự động gộp** phần data quá khứ này (vì `execution_date` quá khứ nhỏ hơn max date). Cách giải quyết: Sau mọi đợt backfill, bạn bắt buộc phải chạy `dbt run --full-refresh` để dbt xây lại toàn bộ dữ liệu từ đầu. Đây là một Trade-off để hệ thống đạt hiệu năng tối đa hàng ngày.
 
 ---
 

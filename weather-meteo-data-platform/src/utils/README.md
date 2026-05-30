@@ -78,6 +78,7 @@ class ConfigManager:
     "retry_delay_sec": 5
   },
   "alert_thresholds": {
+    "rain_probability_pct": 80,
     "rain_mm": 3.0,
     "pm25_alert_ugm3": 55.0,
     "uv_alert_index": 8.0,
@@ -89,8 +90,12 @@ class ConfigManager:
     ]
   },
   "alert_job": {
-    "target_region_prefix": "HCM ",
-    "schedule_hours": [6, 20]
+    "scheduled_region_prefix": "",
+    "sudden_region_prefix": "",
+    "schedule_hours": {
+      "morning": 6,
+      "evening": 20
+    }
   }
 }
 ```
@@ -130,7 +135,7 @@ from src.utils.config_manager import config_manager  # Import thẳng object, kh
 timeout = config_manager.api_config.get("timeout_sec", 10)
 
 # Cách 2 (Fail-fast): Cho tham số nghiệp vụ trọng yếu
-prefix = config_manager.alert_job_config["target_region_prefix"]
+prefix = config_manager.alert_job_config["scheduled_region_prefix"]
 ```
 
 ---

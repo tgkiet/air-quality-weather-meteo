@@ -175,8 +175,13 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- Cấp quyền SELECT trên các bảng SẼ ĐƯỢC TẠO TRONG TƯƠNG LAI bởi dbt.
     -- Không có dòng này, sau khi dbt run tạo mart_hourly_conditions,
     -- Superset vẫn bị lỗi "permission denied for table mart_hourly_conditions".
+    -- 
+    -- SECURITY FIX & ASSUMPTION: Lệnh này áp dụng cho bảng do $POSTGRES_USER tạo.
+    -- Nếu sau này DevOps đổi dbt sang chạy bằng tài khoản khác (vd: 'dbt_executor'),
+    -- thì BẮT BUỘC phải thêm dòng:
+    -- ALTER DEFAULT PRIVILEGES FOR USER dbt_executor IN SCHEMA gold_layer GRANT SELECT ON TABLES TO $SUPERSET_DB_USER;
     ALTER DEFAULT PRIVILEGES
-        FOR USER $POSTGRES_USER   -- Khi POSTGRES_USER (owner dbt chạy) tạo table mới
+        FOR USER $POSTGRES_USER
         IN SCHEMA gold_layer
         GRANT SELECT ON TABLES TO $SUPERSET_DB_USER;
 

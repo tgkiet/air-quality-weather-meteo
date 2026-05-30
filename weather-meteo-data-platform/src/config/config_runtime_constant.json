@@ -9,8 +9,8 @@
     "retry_delay_sec": 5
   },
   "alert_thresholds": {
-    "rain_probability_pct": 80,
-    "rain_mm": 3.0,
+    "rain_probability_pct": 69,
+    "rain_mm": 1.0,
     "pm25_alert_ugm3": 55.0,
     "uv_alert_index": 8.0,
     "heatwave_alert_temp": 38.0
@@ -55,8 +55,8 @@
     ]
   },
   "alert_job": {
-    "scheduled_region_prefix": "HCM ",
-    "sudden_region_prefix": "",
+    "scheduled_region_prefix": "HCM",
+    "sudden_region_prefix": "HCM",
     "schedule_hours": {
       "morning": 6,
       "evening": 20

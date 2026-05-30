@@ -33,18 +33,14 @@ air_quality AS (
 joined AS (
     SELECT
         -- ==========================================
-        -- NHÓM 1: TRƯỜNG ĐỊNH DANH (Dimensions)
-        -- Xác định "Dữ liệu này là của giờ nào, ở đâu"
-        -- ==========================================
-        -- BI TIMEZONE HACK (Quan trọng):
-        -- Ép TIMESTAMPTZ (chuẩn UTC) về lại Naive Timestamp (giờ địa phương Việt Nam).
-        -- Mục đích: Vô hiệu hóa lỗi lệch 7 tiếng của ECharts trên Superset (ECharts luôn ép
-        -- trục X render theo UTC). Khi truyền Naive Timestamp, Superset buộc phải hiển thị 
-        -- đúng chữ số giờ của Việt Nam.
-        w.forecast_time AT TIME ZONE 'Asia/Bangkok' AS forecast_time,
+        -- TIMEZONE CHUẨN (Production-Grade):
+        -- Giữ nguyên định dạng TIMESTAMPTZ để bảo toàn Timezone Semantics.
+        -- Nếu Superset/ECharts bị lệch múi giờ, xử lý bằng SUPERSET_WEBSERVER_TIMEOUT
+        -- hoặc config của Frontend, tuyệt đối không dùng Naive Timestamp Hack ở Tầng Data.
+        w.forecast_time,
         w.latitude,
         w.longitude,
-        w.execution_date AT TIME ZONE 'Asia/Bangkok' AS execution_date,
+        w.execution_date,
         -- w.location_name hiển thị tên vùng quan trắc (HN Quận Cầu Giấy, HCM Quận 1...)
         -- cho 52 locations (30 HN + 22 HCM).
         w.location_name,

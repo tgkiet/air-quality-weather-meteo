@@ -30,11 +30,11 @@ source .env && docker exec -it postgres_container psql -U "$POSTGRES_USER" -d ai
 **2.2. Kéo dữ liệu từ Archive API (2022 - nay)**
 Kéo data tự động cho toàn bộ 52 khu vực (30 HN + 22 HCM). Quá trình mất ~15 phút.
 ```bash
-docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-date 2026-05-28
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-date 2026-05-29
 ```
 
 ```bash
-docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-28
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-29
 ```
 
 ---
@@ -76,6 +76,6 @@ docker compose logs -f superset
 # Dừng hệ thống (Giữ nguyên Data)
 docker compose stop
 
-# ⚠️ XÓA SẠCH MỌI THỨ (Bao gồm cả Superset Dashboard)
+# ⚠️ XÓA SẠCH MỌI THỨ (Bao gồm cả Superset Dashboard) ⚠️
 docker compose down -v && docker compose up -d --build
 ```
