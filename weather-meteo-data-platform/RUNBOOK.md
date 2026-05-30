@@ -77,5 +77,8 @@ docker compose logs -f superset
 docker compose stop
 
 # ⚠️ XÓA SẠCH MỌI THỨ (Bao gồm cả Superset Dashboard) ⚠️
+> [!CAUTION]
+> Cờ `-v` sẽ xóa vĩnh viễn Named Volume `postgres_data`, gây mất toàn bộ dữ liệu Data Warehouse thu thập được.
+> Hãy Backup trước khi chạy: `docker exec postgres_container pg_dump -U gkinhere air_quality_db > backup.sql`
 docker compose down -v && docker compose up -d --build
 ```

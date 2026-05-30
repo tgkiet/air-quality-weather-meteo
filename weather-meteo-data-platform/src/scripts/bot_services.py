@@ -37,44 +37,31 @@ class BotDatabaseManager:
     """Handles all database interactions for the Telegram Bot."""
     def __init__(self, loader_instance):
         self.loader = loader_instance
+        # QUALITY-7 FIX: Removed ThreadedConnectionPool. 
+        # Keeping idle connections in a pool causes TCP timeouts (stale connections) 
+        # when the bot is idle, leading to 3-second UI lags on the first click.
+        # Direct connections on localhost take <10ms, eliminating the stale connection bug entirely.
+
+    @contextmanager
+    def get_db_connection(self):
+        conn = None
         try:
-            self.pool = ThreadedConnectionPool(
-                minconn=1,
-                maxconn=5,
+            conn = psycopg2.connect(
                 dbname=self.loader.db_name,
                 user=self.loader.db_user,
                 password=self.loader.db_password,
                 host=self.loader.db_host,
                 port=self.loader.db_port
             )
-            logger.info("Initialized ThreadedConnectionPool for Telegram Bot.")
-        except Exception as e:
-            logger.error(f"Failed to create ThreadedConnectionPool: {e}")
-            raise
-
-    @contextmanager
-    def get_db_connection(self):
-        conn = None
-        for attempt in range(2):
-            conn = self.pool.getconn()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-                break
-            except (psycopg2.OperationalError, psycopg2.InterfaceError):
-                self.pool.putconn(conn, close=True)
-                conn = None
-                if attempt == 1:
-                    raise
-        try:
             yield conn
-        except Exception:
+        except Exception as e:
+            logger.error(f"Database connection error: {e}")
             if conn and not conn.closed:
                 conn.rollback()
             raise
         finally:
-            if conn:
-                self.pool.putconn(conn)
+            if conn and not conn.closed:
+                conn.close()
 
     def init_lang_table(self):
         try:
@@ -223,14 +210,14 @@ class BotFormatter:
                 uv_lv  = _UV_LEVEL_EN.get(r["uv_level"] or "", r["uv_level"] or "N/A")
                 
                 if rain > 0:
-                    if rain > self.rain_mm_threshold and prob >= self.rain_prob_threshold:
-                        rain_desc, alert = "Heavy rain", " [!! 🚨 ALERT 🚨 !!]"
+                    if rain >= self.rain_mm_threshold and prob >= self.rain_prob_threshold:
+                        rain_desc, alert = "Heavy rain / Flood risk", " [!! ALERT !!]"
                         rain_icon = "⛈️"
-                    elif rain > self.rain_mm_threshold:
-                        rain_desc, alert = "Moderate rain", ""
+                    elif rain >= self.rain_mm_threshold:
+                        rain_desc, alert = "Widespread rain", ""
                         rain_icon = "🌧️"
                     else:
-                        rain_desc, alert = "Light rain", ""
+                        rain_desc, alert = "Local showers / Thunderstorms", ""
                         rain_icon = "🌦️"
                     rain_text = f"{rain_icon} {rain_desc} ({rain:.1f} mm) | Chance of rain: {prob}%{alert}"
                 else:
@@ -247,14 +234,14 @@ class BotFormatter:
                 uv_lv  = r["uv_level"] or "N/A"
 
                 if rain > 0:
-                    if rain > self.rain_mm_threshold and prob >= self.rain_prob_threshold:
-                        rain_desc, alert = "Mưa lớn", " [!! 🚨 CẢNH BÁO 🚨 !!]"
+                    if rain >= self.rain_mm_threshold and prob >= self.rain_prob_threshold:
+                        rain_desc, alert = "Mưa rất lớn / Nguy cơ ngập", " [!! CẢNH BÁO !!]"
                         rain_icon = "⛈️"
-                    elif rain > self.rain_mm_threshold:
-                        rain_desc, alert = "Mưa vừa", ""
+                    elif rain >= self.rain_mm_threshold:
+                        rain_desc, alert = "Mưa diện rộng", ""
                         rain_icon = "🌧️"
                     else:
-                        rain_desc, alert = "Mưa nhỏ", ""
+                        rain_desc, alert = "Mưa rào / Dông cục bộ", ""
                         rain_icon = "🌦️"
                     rain_text = f"{rain_icon} {rain_desc} ({rain:.1f} mm) | Tỉ lệ có mưa: {prob}%{alert}"
                 else:

@@ -38,7 +38,7 @@ class TelegramInteractiveBot(BasePostgresLoader):
         if not self.bot_token:
             raise ValueError("TELEGRAM_BOT_TOKEN is not configured in environment.")
 
-        self.bot = telebot.TeleBot(self.bot_token, parse_mode=None, num_threads=10)
+        self.bot = telebot.TeleBot(self.bot_token, parse_mode=None, num_threads=4)
         bkk_tz = ZoneInfo("Asia/Bangkok")
 
         bot_cfg    = config_manager.telegram_bot_config
@@ -215,6 +215,24 @@ class TelegramInteractiveBot(BasePostgresLoader):
             )
         return kb
 
+    def _safe_edit_message(self, text, chat_id, message_id, reply_markup):
+        import time
+        try:
+            self.bot.edit_message_text(text, chat_id, message_id, reply_markup=reply_markup)
+        except Exception as e:
+            err_str = str(e).lower()
+            if "too many requests" in err_str or "retry after" in err_str:
+                logger.warning("Telegram rate limit hit (429). Sleeping for 1.5s and retrying...")
+                time.sleep(1.5)
+                try:
+                    self.bot.edit_message_text(text, chat_id, message_id, reply_markup=reply_markup)
+                except Exception as inner_e:
+                    logger.error(f"Failed to edit message after retry: {inner_e}")
+            elif "message is not modified" in err_str:
+                pass # Ignore identical edits
+            else:
+                logger.error(f"Error editing message: {e}")
+
     # ================================================================
     # HANDLERS
     # ================================================================
@@ -256,36 +274,36 @@ class TelegramInteractiveBot(BasePostgresLoader):
         name = call.from_user.first_name or "there"
         text = self.formatter.get_guide_text(lang, name)
         
-        self.bot.edit_message_text(
+        self._safe_edit_message(
+            text=text,
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
-            text=text,
             reply_markup=self._kb_main(lang)
         )
 
     def cb_main_menu(self, call) -> None:
-        lang = self._get_lang(call.message.chat.id)
         self.bot.answer_callback_query(call.id)
+        lang = self._get_lang(call.message.chat.id)
         text = "Select a feature:\n(Type /start to change language or view full guide)" if lang == "en" \
                else "Chọn một chức năng:\n(Gõ /start để đổi ngôn ngữ hoặc xem hướng dẫn)"
-        self.bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_main(lang))
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_main(lang))
 
     def cb_sel_weather(self, call) -> None:
-        lang = self._get_lang(call.message.chat.id)
         self.bot.answer_callback_query(call.id)
+        lang = self._get_lang(call.message.chat.id)
         text = "WEATHER FORECAST\nSelect a city:" if lang == "en" else "DỰ BÁO THỜI TIẾT\nChọn thành phố:"
-        self.bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_cities("weather", lang))
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_cities("weather", lang))
 
     def cb_sel_aqi(self, call) -> None:
-        lang = self._get_lang(call.message.chat.id)
         self.bot.answer_callback_query(call.id)
+        lang = self._get_lang(call.message.chat.id)
         text = "AIR QUALITY INDEX\nSelect a city:" if lang == "en" else "CHẤT LƯỢNG KHÔNG KHÍ\nChọn thành phố:"
-        self.bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_cities("aqi", lang))
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_cities("aqi", lang))
 
     def cb_show_districts(self, call) -> None:
+        self.bot.answer_callback_query(call.id)
         lang = self._get_lang(call.message.chat.id)
         _, action, city = call.data.split(_CB_SEP)
-        self.bot.answer_callback_query(call.id)
         feature = "WEATHER" if action == "weather" else "AQI"
         feature_vn = "DỰ BÁO THỜI TIẾT" if action == "weather" else "CHẤT LƯỢNG KHÔNG KHÍ"
         
@@ -296,9 +314,10 @@ class TelegramInteractiveBot(BasePostgresLoader):
                 break
                 
         text = f"{feature} - {city_label}\nSelect a district:" if lang == "en" else f"{feature_vn} - {city_label}\nChọn quận/huyện:"
-        self.bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_districts(action, city, lang))
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_districts(action, city, lang))
 
     def cb_sel_time_weather(self, call) -> None:
+        self.bot.answer_callback_query(call.id)
         lang = self._get_lang(call.message.chat.id)
         _, db_name = call.data.split(_CB_SEP, 1)
         
@@ -316,9 +335,8 @@ class TelegramInteractiveBot(BasePostgresLoader):
             self.bot.answer_callback_query(call.id, text="Khu vực không tồn tại.")
             return
 
-        self.bot.answer_callback_query(call.id)
         text = f"Select forecast duration for {district['label']}:" if lang == "en" else f"Chọn mốc thời gian dự báo cho {district['label']}:"
-        self.bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_time_options(db_name, lang))
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_time_options(db_name, lang))
 
     def cb_show_weather(self, call) -> None:
         lang = self._get_lang(call.message.chat.id)
@@ -338,11 +356,11 @@ class TelegramInteractiveBot(BasePostgresLoader):
             city = db_name.split(" ")[0]
             not_found = f"No weather data found for {district['label']}.\nPlease try again later." if lang == "en" \
                         else f"Không tìm thấy dữ liệu thời tiết cho {district['label']}.\nVui lòng thử lại sau."
-            self.bot.edit_message_text(not_found, call.message.chat.id, call.message.message_id, reply_markup=self._kb_time_options(db_name, lang))
+            self._safe_edit_message(not_found, call.message.chat.id, call.message.message_id, reply_markup=self._kb_time_options(db_name, lang))
             return
 
         text = self.formatter.fmt_weather(district["label"], rows, lang, limit, offset)
-        self.bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_after_result_wx(db_name, limit, offset, lang))
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_after_result_wx(db_name, limit, offset, lang))
 
     def cb_show_aqi(self, call) -> None:
         lang = self._get_lang(call.message.chat.id)
@@ -369,11 +387,11 @@ class TelegramInteractiveBot(BasePostgresLoader):
             city = db_name.split(" ")[0]
             not_found = f"No AQI data found for {district['label']}.\nPlease try again later." if lang == "en" \
                         else f"Không tìm thấy dữ liệu AQI cho {district['label']}.\nVui lòng thử lại sau."
-            self.bot.edit_message_text(not_found, call.message.chat.id, call.message.message_id, reply_markup=self._kb_districts("aqi", city, lang))
+            self._safe_edit_message(not_found, call.message.chat.id, call.message.message_id, reply_markup=self._kb_districts("aqi", city, lang))
             return
 
         text = self.formatter.fmt_aqi(district["label"], row, lang)
-        self.bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_after_result(db_name, "aqi", lang))
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_after_result(db_name, "aqi", lang))
 
     def run(self) -> None:
         logger.info("Telegram Interactive Bot is running...")

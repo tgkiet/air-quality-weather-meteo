@@ -156,7 +156,11 @@ docker exec airflow_container bash -c \
                --profiles-dir /home/airflow/.dbt"
 ```
 
->  **Reset hoàn toàn (xóa sạch data):**
+> [!CAUTION]
+> **LỆNH XÓA SẠCH DATA (CHỈ DÙNG KHI THẬT SỰ CẦN THIẾT)**
+> Cờ `-v` sẽ xóa vĩnh viễn Named Volume `postgres_data`, gây mất toàn bộ dữ liệu Data Warehouse thu thập được.
+> Hãy Backup trước khi chạy:
+> `docker exec postgres_container pg_dump -U gkinhere air_quality_db > backup.sql`
 > ```bash
 > docker compose down -v && docker compose up -d --build
 > ```
@@ -182,12 +186,12 @@ docker exec airflow_container bash -c \
 
 ## Kiến trúc Dual-Core Telegram Bot (Consumption Layer)
 Hệ thống sử dụng Bot Telegram làm giao diện Data-as-a-Product với các chuẩn mực khắt khe:
-- **Strict OOP & Connection Pooling**: Tách biệt hoàn toàn Controller (`telegram_bot.py`), Service/Formatter (`bot_services.py`). Xử lý concurrent requests mượt mà nhờ kiến trúc Pool kết nối.
+- **Strict OOP & Stateless Connection**: Tách biệt hoàn toàn Controller (`telegram_bot.py`), Service/Formatter (`bot_services.py`). Xử lý concurrent requests mượt mà nhờ kiến trúc Stateless Direct Database Connection giúp triệt tiêu hoàn toàn độ trễ TCP Idle Timeout.
 - **Pull Bot - Phân trang (Pagination) & UI Cleanup**: Người dùng có quyền tra cứu tương lai theo khung (6h, 12h, 24h, Ngày Mai). Giao diện áp dụng cơ chế **State Editing** (`edit_message_text`), đảm bảo khung chat Telegram luôn giữ 1 tin nhắn duy nhất, cực kỳ gọn gàng. Thuật toán Slicing in-memory giúp tránh vượt giới hạn 4096 ký tự của API Telegram.
 - **Push Bot - Bản tin Đa Rủi Ro (Holistic Briefing)**: 
   - Thay vì gửi cảnh báo lẻ tẻ, hệ thống sẽ phát thanh bản tin Gộp lúc 06:00 (Hôm nay) và 20:00 (Ngày mai). 
   - Bản tin quét đồng thời 4 rủi ro lớn: **Bụi mịn (PM2.5), Tia UV, Nắng gắt (Heatwave), và Mưa**. 
-- **Layered Alerts (Phân lớp Cảnh báo)**: Không chỉ là nhị phân (Có/Không), thuật toán tự động phân loại mức độ Mưa (Mưa vừa: >=3.0mm vs Mưa lớn: >=5.0mm) để người dùng có quyết định hành động tương xứng (chống Spam).
+- **Layered Alerts (Phân lớp Cảnh báo)**: Không chỉ là nhị phân (Có/Không), thuật toán tự động phân loại mức độ Mưa (Mưa vừa: >=2.0mm vs Mưa lớn: >=5.0mm) để người dùng có quyết định hành động tương xứng (chống Spam).
 - **System Heartbeat**: Nếu ngày mai/hôm nay thời tiết hoàn hảo, Bot vẫn phát 1 thông báo "Trời đẹp" để DevOps/Người dùng biết rằng Pipeline Airflow và hệ thống Bot vẫn đang sống (Health Check ngầm định).
 - **Zero Hardcode**: Toàn bộ mốc cảnh báo (VD: PM2.5 >55, UV >8.0) và giờ phát thanh được tách hoàn toàn ra khỏi Python và dbt, khóa chặt trong `config_runtime_constant.json`.
 
@@ -207,7 +211,7 @@ weather-meteo-data-platform/
 │   │   └── config_runtime_constant.json # Cấu hình UI/UX cho Bot (Zero hardcode)
 │   ├── extractors/open_meteo.py
 │   ├── loaders/
-│   │   ├── base_loader.py      # Connection pooling (OOP)
+│   │   ├── base_loader.py      # Stateless Direct Connection (OOP)
 │   │   ├── postgres_loader.py  # UPSERT realtime data
 │
 │   ├── scripts/

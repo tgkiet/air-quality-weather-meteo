@@ -66,7 +66,7 @@ File này chứa các thông số kỹ thuật có thể thay đổi theo môi t
 | `api.timeout_sec` | `30` | Timeout cho mỗi request API, tính bằng giây |
 | `database.max_retries` | `3` | Số lần retry khi kết nối PostgreSQL thất bại |
 | `database.retry_delay_sec` | `5` | Thời gian chờ giữa các lần retry database, tính bằng giây |
-| `alert_thresholds` | `Dict` | Các mốc cảnh báo dùng chung cho Bot Push/Pull: `rain_mm` (3.0), `pm25_alert_ugm3` (55.0), `uv_alert_index` (8.0), `heatwave_alert_temp` (38.0). Hỗ trợ phân lớp rủi ro động. |
+| `alert_thresholds` | `Dict` | Các mốc cảnh báo dùng chung cho Bot Push/Pull: `rain_mm` (2.0), `pm25_alert_ugm3` (55.0), `uv_alert_index` (8.0), `heatwave_alert_temp` (38.0). Hỗ trợ phân lớp rủi ro động. |
 | `alert_job_config` | `Dict` | Chứa `schedule_hours` định nghĩa lịch phát thanh Holistic Briefing: Sáng (6h) và Tối (20h), giúp decouple hoàn toàn khỏi code Python. |
 | `telegram_bot.districts` | `List` | Danh sách các Quận/Huyện hiển thị lên Menu của Telegram Bot |
 | `alert_job.target_region_prefix` | `"HCM "` | Dùng để lọc khu vực phát thanh cảnh báo khẩn cấp (Push Alert) |
