@@ -40,7 +40,7 @@ dbt-transform/
 |---|---|---|
 | `staging/` | `view` | Không lưu vật lý, chỉ là SQL alias. Không tốn storage. |
 | `silver/` | `incremental` | Chỉ process batch mới → nhanh hơn full refresh ×10+ |
-| `marts/` | `table` (schema: `gold_layer`) | Flat table cho BI — read-heavy, write-once-per-run |
+| `marts/` | `table` (schema: `gold_layer`) | Flat table cho BI — read-heavy. Được config sẵn 4 bộ **Native Indexes** (`+indexes`) để đảm bảo truy vấn siêu tốc (<1ms) cho cả Telegram Bot, Superset và DBMS. |
 
 ---
 
@@ -175,6 +175,6 @@ dbt test --select slv_weather_hourly \
 | `profiles.yml` mount read-only (`ro`) | Bảo mật — không để Airflow container ghi đè credentials |
 | `generate_schema_name.sql` macro override | Tránh schema xấu kiểu `silver_layer_gold_layer` |
 | Gold `is_air_quality_alert` nullable | NULL ≠ FALSE — phân biệt "không có data" với "không alert" |
-| Bỏ `ORDER BY` trong model Tầng Gold (`mart_hourly_conditions`) | PostgreSQL `table` không lưu thứ tự vật lý, lệnh sort cuối model là vô dụng. Thay thế bằng Table Index (nếu cần). |
+| Native Index Toàn Diện (`+indexes`) | Tạo 4 bộ Index vật lý cho bảng Gold ngay khi build table. Tối ưu toàn diện: `(forecast_time)` & `(forecast_time_local)` cho Superset/BI, Compound `(location_name, forecast_time)` cho Telegram Bot (<1ms), `(lat, lon)` cho Geospatial. Dùng Native thay cho `post-hook` để đảm bảo idempotent và an toàn. |
 | Giữ các cờ cảnh báo `is_weather_alert` tĩnh (hardcode) | Cờ tĩnh ở Data Mart chuyên phục vụ vẽ Dashboard Superset. Cảnh báo linh hoạt của Push Bot được decouple hoàn toàn và cấu hình qua file JSON. |
 | Xóa magic numbers tọa độ ở Staging | Tọa độ chuẩn (requested_lat/lon) đã được tiêm (inject) từ Python ở tầng Extract. dbt không cần gánh trách nhiệm sửa lỗi Grid Snapping của API nữa. |

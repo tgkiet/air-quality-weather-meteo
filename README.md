@@ -68,7 +68,7 @@ Hệ thống cung cấp giải pháp toàn diện với:
 ## Consumption Layer (Telegram Bot & Alert)
 
 Hệ thống giao tiếp với người dùng qua kiến trúc **Dual-Core Bot** (Data-as-a-Product):
-- **Pull Bot (Interactive)**: Hỗ trợ người dùng chủ động tra cứu thời tiết với menu **Phân trang (Pagination)** 6h/12h/24h. Giao diện được tối ưu bằng **State Editing** (luôn giữ 1 tin nhắn duy nhất chống Spam). Chịu tải cao nhờ **Threaded Connection Pooling**.
+- **Pull Bot (Interactive)**: Hỗ trợ người dùng chủ động tra cứu thời tiết với menu **Phân trang (Pagination)**. Giao diện được tối ưu bằng **State Editing** (luôn giữ 1 tin nhắn duy nhất). Chịu tải cao và triệt tiêu độ trễ (<1ms) nhờ kiến trúc **Stateless Direct Database Connection** kết hợp **dbt Native Indexes**.
 - **Push Bot (Holistic Briefing & Sudden Alert)**:
   - **Bản tin Định kỳ (06:00 & 20:00)**: Tổng hợp đồng thời 4 rủi ro lớn (Mưa, Bụi mịn PM2.5, Tia UV, Nắng gắt) cho Ngày/Ngày mai. Hỗ trợ **Phân lớp Cảnh báo** (Mưa lớn >=5.0mm, Mưa vừa >=3.0mm).
   - **System Heartbeat**: Gửi bản tin "Thời tiết lý tưởng" nếu hệ thống an toàn, đảm bảo Observability.

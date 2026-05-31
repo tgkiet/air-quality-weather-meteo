@@ -1,5 +1,4 @@
 import psycopg2
-from psycopg2.pool import ThreadedConnectionPool
 from contextlib import contextmanager
 import psycopg2.extras
 from datetime import datetime

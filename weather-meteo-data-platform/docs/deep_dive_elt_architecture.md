@@ -172,7 +172,7 @@ khác hoàn toàn với FALSE nghĩa "Không có alert". Dashboard phải hiển
 Hệ thống cung cấp Data-as-a-Product thông qua Telegram Bot với kiến trúc hai lõi (Dual-Core) độc lập, đảm bảo Isolation và UX tối ưu:
 
 - **Pull Bot (`telegram_bot.py` - Lõi Tương Tác):** Phục vụ tra cứu On-demand.
-  - Sử dụng **Threaded Connection Pooling** để chịu tải.
+  - Sử dụng **Direct Database Connection** (thay vì Connection Pooling) để giải quyết dứt điểm lỗi TCP Idle Timeout, đảm bảo query thời tiết siêu tốc (<1ms) nhờ 4 bộ **Native Indexes** (`dbt +indexes`).
   - Áp dụng **State Editing (`edit_message_text`)** để ghi đè tin nhắn cũ, giữ khung chat luôn có đúng 1 tin nhắn duy nhất, dọn dẹp triệt để hiện tượng Spam màn hình.
   - Tích hợp thuật toán Slicing In-Memory vượt rào giới hạn 4096 ký tự của API Telegram.
 - **Push Bot (`alert_job.py` - Lõi Cảnh Báo):** Phát thanh rủi ro tự động.

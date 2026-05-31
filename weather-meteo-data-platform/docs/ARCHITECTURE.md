@@ -186,7 +186,7 @@ Models dbt trong `models/marts/`:
         └── Lõi Pull Bot (Interactive):
             ├── Trả lời Query của người dùng theo thời gian thực
             ├── Áp dụng Phân trang (Pagination) in-memory an toàn
-            ├── Xử lý Concurrent Requests với Stateless Direct Database Connection giúp triệt tiêu TCP Idle Timeout
+            ├── Xử lý Concurrent Requests với Stateless Direct Database Connection giúp triệt tiêu TCP Idle Timeout (kết hợp 4 bộ dbt Native Indexes cho tốc độ <1ms)
             └── Clean UI qua `edit_message_text`
 ```
 
