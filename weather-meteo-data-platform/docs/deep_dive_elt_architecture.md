@@ -10,9 +10,7 @@ của hệ thống Air Quality & Weather Data Platform — dành cho người h�
 
 ### ETL (Mô hình cũ — trước 2015)
 
-```
-API → [Python Transform trên RAM] → Database (bảng đẹp)
-```
+> API → [Python Transform trên RAM] → Database (bảng đẹp)
 
 - Transform xảy ra **trước khi** vào Database, trên bộ nhớ của máy chạy script.
 - **Nhược điểm nghiêm trọng:** Nếu logic nghiệp vụ thay đổi (thêm cột, đổi công thức), bạn
@@ -20,9 +18,7 @@ API → [Python Transform trên RAM] → Database (bảng đẹp)
 
 ### ELT (Mô hình hiện đại — dự án này)
 
-```
-API → Database (JSONB thô) → [SQL Transform bên trong DB] → Bảng đẹp
-```
+> API → Database (JSONB thô) → [SQL Transform bên trong DB] → Bảng đẹp
 
 - Dữ liệu thô được lưu **vĩnh viễn** trong Database.
 - Transform xảy ra **bên trong** Database bằng SQL (qua dbt).
@@ -208,11 +204,9 @@ Mỗi class chỉ biết đúng phạm vi trách nhiệm của mình. Đây là 
 
 **Tách biệt Config và Code:**
 
-```
-config.json  ← 52 locations (30 HN + 22 HCM), API URLs, timeout, retry params
-.env         ← DB password, Airflow password (không bao giờ commit Git)
-.py files    ← Logic thuần túy, không có số ma thuật (magic number)
-```
+- `config.json` ← 52 locations (30 HN + 22 HCM), API URLs, timeout, retry params
+- `.env` ← DB password, Airflow password (không bao giờ commit Git)
+- `.py files` ← Logic thuần túy, không có số ma thuật (magic number)
 
 ### Zero Hardcode via Singleton Pattern & Hybrid Design
 
@@ -330,9 +324,7 @@ Macro override này đảm bảo: folder `marts` → schema `gold_layer` (đúng
 
 ### Data Quality Tests — 32 Bài Kiểm Tra Tự Động
 
-```
-dbt test chạy sau dbt run. Nếu bất kỳ test nào FAIL → Airflow task FAILED → Alert.
-```
+> **Lưu ý:** `dbt test` chạy sau `dbt run`. Nếu bất kỳ test nào FAIL → Airflow task FAILED → Alert.
 
 | Loại Test | Ý nghĩa | Ở đâu |
 |---|---|---|

@@ -59,9 +59,9 @@ LATERAL jsonb_array_elements_text(raw_json->'hourly'->'time') WITH ORDINALITY AS
 CAST(raw_json->'hourly'->'temperature_2m'->>(t.idx::int - 1) AS NUMERIC) AS temperature_2m
 ```
 
-**** Mọi staging model phải **explicit list** đúng thứ tự cột để UNION ALL trong Silver không bị positional mismatch. Không được dùng `SELECT *` trong UNION ALL.
+> **Lưu ý:** Mọi staging model phải **explicit list** đúng thứ tự cột để UNION ALL trong Silver không bị positional mismatch. Không được dùng `SELECT *` trong UNION ALL.
 
-**** Dữ liệu hoàn toàn 100% được lấy từ API. `location_name` được chèn trực tiếp từ config, không còn tình trạng NULL như trước đây, giúp lược đồ Medallion sạch sẽ tuyệt đối từ Bronze đến Gold.
+> **Lưu ý:** Dữ liệu hoàn toàn 100% được lấy từ API. `location_name` được chèn trực tiếp từ config, không còn tình trạng NULL như trước đây, giúp lược đồ Medallion sạch sẽ tuyệt đối từ Bronze đến Gold.
 
 ---
 

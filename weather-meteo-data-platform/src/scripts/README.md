@@ -79,10 +79,11 @@ ADD CONSTRAINT unique_historical_datetime_lat_lon UNIQUE (datetime, lat, lon);
 ### Tham Số
 
 ```bash
+# Tham số bắt buộc: --location-prefix {HCM|HN}, --start-date YYYY-MM-DD, --end-date YYYY-MM-DD
 python3 backfill_history.py \
-    --location-prefix {HCM|HN} \   # Bắt buộc
-    --start-date YYYY-MM-DD \       # Bắt buộc
-    --end-date   YYYY-MM-DD         # Bắt buộc
+    --location-prefix HCM \
+    --start-date 2022-08-02 \
+    --end-date 2026-05-30
 ```
 
 ### Cách Dùng — 2 Trường Hợp

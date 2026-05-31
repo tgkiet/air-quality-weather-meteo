@@ -62,6 +62,7 @@ Hệ thống cung cấp giải pháp toàn diện với:
 
 **Stack:** Python · Apache Airflow 3.2.0 · dbt 1.9.0 · PostgreSQL 16 · Docker Compose
 
+```
 ---
 
 ## Consumption Layer (Telegram Bot & Alert)

@@ -18,12 +18,12 @@ Nhận URL của API endpoint. Toàn bộ cấu hình kỹ thuật (retry, timeo
 
 ### Chiến lược Retry (Exponential Backoff)
 
-```
-Lần 1 thất bại → chờ 0 giây → thử lại
-Lần 2 thất bại → chờ 2 giây → thử lại
-Lần 3 thất bại → chờ 4 giây → raise lỗi
-```
-
+> **Mô phỏng (Ví dụ khi cấu hình `max_retries=5`):**
+> 1. Lần 1 thất bại → chờ 0 giây → thử lại
+> 2. Lần 2 thất bại → chờ 2 giây → thử lại
+> 3. Lần 3 thất bại → chờ 4 giây → thử lại
+> 4. ...
+> 5. Quá giới hạn retry → raise lỗi
 Chỉ retry với các mã HTTP báo lỗi SERVER hoặc QUÁ TẢI:
 - `429` Too Many Requests
 - `500` Internal Server Error
@@ -46,16 +46,14 @@ Chỉ retry với các mã HTTP báo lỗi SERVER hoặc QUÁ TẢI:
 | `expected_keys` | `set` | không | Tập hợp các key BẮT BUỘC phải có trong response JSON |
 
 **Luồng xử lý bên trong:**
-```
-1. GET request → response.raise_for_status() (bắt 4xx/5xx)
-2. response.json() → raw_data
-3. isinstance check: raw_data có phải dict không?
-4. Defensive check: raw_data có chứa {"error": true} không?
-5. Data Contract: raw_data có đủ expected_keys không?
-6. Nested check: nếu "hourly" trong expected_keys, raw_data["hourly"] có "time" không?
-7. return raw_data
-```
-
+**Luồng xử lý bên trong:**
+1. GET request → `response.raise_for_status()` (bắt 4xx/5xx)
+2. `response.json()` → `raw_data`
+3. `isinstance` check: `raw_data` có phải `dict` không?
+4. Defensive check: `raw_data` có chứa `{"error": true}` không?
+5. Data Contract: `raw_data` có đủ `expected_keys` không?
+6. Nested check: nếu `hourly` trong `expected_keys`, `raw_data["hourly"]` có `time` không?
+7. Trả về `raw_data`
 **Exception handling:**
 | Loại lỗi | Exception bắt | Raise ra |
 |---|---|---|

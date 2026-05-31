@@ -142,10 +142,7 @@ prefix = config_manager.alert_job_config["scheduled_region_prefix"]
 
 ## Tóm tắt quan hệ giữa 2 file utils
 
-```
-logger.py          → Công cụ quan sát (Observability)
-config_manager.py  → Công cụ cấu hình (Configuration)
+- `logger.py` → Công cụ quan sát (Observability)
+- `config_manager.py` → Công cụ cấu hình (Configuration)
 
-Mọi module trong src/ đều import cả 2.
-ConfigManager dùng logger để báo khi nạp config thành công/thất bại.
-```
+> Mọi module trong `src/` đều import cả 2. `ConfigManager` dùng `logger` để báo khi nạp config thành công/thất bại.

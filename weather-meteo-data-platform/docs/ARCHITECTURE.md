@@ -193,8 +193,8 @@ Models dbt trong `models/marts/`:
 **Nếu bất kỳ bước nào raise Exception:**
 → Python exit code ≠ 0  
 → Airflow đánh dấu task **FAILED**  
-→ Airflow tự **retry** tối đa 3 lần  
-→ Nếu vẫn FAILED sau 3 lần → gửi alert (nếu cấu hình)
+→ Airflow tự **retry** tùy chỉnh (vd: 2 lần)
+→ Nếu vẫn FAILED → gửi alert (nếu cấu hình)
 
 ---
 
