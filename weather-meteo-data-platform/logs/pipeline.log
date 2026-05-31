@@ -166,3 +166,130 @@
 2026-05-30 22:15:54 | ConfigManager        | INFO     | Successfully loaded/reloaded configurations from disk.
 2026-05-30 22:15:54 | BasePostgresLoader   | INFO     | Connecting to PostgreSQL database (Attempt 1/3)...
 2026-05-30 22:15:54 | BasePostgresLoader   | INFO     | Connection successful!
+2026-05-31 00:46:32 | ConfigManager        | INFO     | Successfully loaded/reloaded configurations from disk.
+2026-05-31 00:46:32 | HistoricalBackfiller | INFO     | === Historical Backfill START ===
+    Location prefix : 'HCM '
+    Date range      : 2022-08-02 → 2026-05-30
+2026-05-31 00:46:32 | HistoricalBackfiller | INFO     | Backfill config: prefix='HCM ' | locations=22 | range=2022-08-02 → 2026-05-30
+2026-05-31 00:46:32 | BasePostgresLoader   | INFO     | Connecting to PostgreSQL database (Attempt 1/3)...
+2026-05-31 00:46:32 | BasePostgresLoader   | INFO     | Connection successful!
+2026-05-31 00:46:32 | HistoricalBackfiller | INFO     | [1/22] HCM Quận 1 (lat=10.775394, lon=106.699625) | id=3000000
+2026-05-31 00:46:49 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 1.
+2026-05-31 00:46:49 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 1.
+2026-05-31 00:46:49 | HistoricalBackfiller | INFO     | [2/22] HCM Quận 3 (lat=10.778891, lon=106.686997) | id=3000001
+2026-05-31 00:47:03 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 3.
+2026-05-31 00:47:03 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 3.
+2026-05-31 00:47:03 | HistoricalBackfiller | INFO     | [3/22] HCM Quận 4 (lat=10.760754, lon=106.70708) | id=3000002
+2026-05-31 00:47:16 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 4.
+2026-05-31 00:47:16 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 4.
+2026-05-31 00:47:16 | HistoricalBackfiller | INFO     | [4/22] HCM Quận 5 (lat=10.755825, lon=106.668284) | id=3000003
+2026-05-31 00:47:30 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 5.
+2026-05-31 00:47:30 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 5.
+2026-05-31 00:47:30 | HistoricalBackfiller | INFO     | [5/22] HCM Quận 6 (lat=10.74589, lon=106.639199) | id=3000004
+2026-05-31 00:47:43 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 6.
+2026-05-31 00:47:43 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 6.
+2026-05-31 00:47:43 | HistoricalBackfiller | INFO     | [6/22] HCM Quận 7 (lat=10.73785, lon=106.729695) | id=3000005
+2026-05-31 00:47:56 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 7.
+2026-05-31 00:47:56 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 7.
+2026-05-31 00:47:56 | HistoricalBackfiller | INFO     | [7/22] HCM Quận 8 (lat=10.721116, lon=106.629208) | id=3000006
+2026-05-31 00:48:09 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 8.
+2026-05-31 00:48:09 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 8.
+2026-05-31 00:48:09 | HistoricalBackfiller | INFO     | [8/22] HCM Quận 10 (lat=10.772528, lon=106.668202) | id=3000007
+2026-05-31 00:48:24 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 10.
+2026-05-31 00:48:24 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 10.
+2026-05-31 00:48:24 | HistoricalBackfiller | INFO     | [9/22] HCM Quận 11 (lat=10.765634, lon=106.647607) | id=3000008
+2026-05-31 00:48:38 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 11.
+2026-05-31 00:48:38 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 11.
+2026-05-31 00:48:38 | HistoricalBackfiller | INFO     | [10/22] HCM Quận 12 (lat=10.861265, lon=106.664208) | id=3000009
+2026-05-31 00:48:52 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận 12.
+2026-05-31 00:48:52 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận 12.
+2026-05-31 00:48:52 | HistoricalBackfiller | INFO     | [11/22] HCM Quận Tân Bình (lat=10.80307, lon=106.652225) | id=3000010
+2026-05-31 00:49:10 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận Tân Bình.
+2026-05-31 00:49:10 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận Tân Bình.
+2026-05-31 00:49:10 | HistoricalBackfiller | INFO     | [12/22] HCM Quận Bình Tân (lat=10.770354, lon=106.599576) | id=3000011
+2026-05-31 00:49:26 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận Bình Tân.
+2026-05-31 00:49:26 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận Bình Tân.
+2026-05-31 00:49:26 | HistoricalBackfiller | INFO     | [13/22] HCM Quận Bình Thạnh (lat=10.812271, lon=106.704039) | id=3000012
+2026-05-31 00:49:42 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận Bình Thạnh.
+2026-05-31 00:49:42 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận Bình Thạnh.
+2026-05-31 00:49:42 | HistoricalBackfiller | INFO     | [14/22] HCM Quận Tân Phú (lat=10.791868, lon=106.627752) | id=3000013
+2026-05-31 00:49:56 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận Tân Phú.
+2026-05-31 00:49:56 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận Tân Phú.
+2026-05-31 00:49:56 | HistoricalBackfiller | INFO     | [15/22] HCM Quận Gò Vấp (lat=10.835354, lon=106.674034) | id=3000014
+2026-05-31 00:50:12 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận Gò Vấp.
+2026-05-31 00:50:12 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận Gò Vấp.
+2026-05-31 00:50:12 | HistoricalBackfiller | INFO     | [16/22] HCM Quận Phú Nhuận (lat=10.801006, lon=106.679764) | id=3000015
+2026-05-31 00:50:25 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Quận Phú Nhuận.
+2026-05-31 00:50:25 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Quận Phú Nhuận.
+2026-05-31 00:50:25 | HistoricalBackfiller | INFO     | [17/22] HCM Thành phố Thủ Đức (lat=10.851024, lon=106.754895) | id=3000016
+2026-05-31 00:50:39 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Thành phố Thủ Đức.
+2026-05-31 00:50:39 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Thành phố Thủ Đức.
+2026-05-31 00:50:39 | HistoricalBackfiller | INFO     | [18/22] HCM Huyện Bình Chánh (lat=10.695083, lon=106.59093) | id=3000017
+2026-05-31 00:50:55 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Huyện Bình Chánh.
+2026-05-31 00:50:55 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Huyện Bình Chánh.
+2026-05-31 00:50:55 | HistoricalBackfiller | INFO     | [19/22] HCM Huyện Hóc Môn (lat=10.877733, lon=106.576052) | id=3000018
+2026-05-31 00:51:09 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Huyện Hóc Môn.
+2026-05-31 00:51:09 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Huyện Hóc Môn.
+2026-05-31 00:51:09 | HistoricalBackfiller | INFO     | [20/22] HCM Huyện Củ Chi (lat=11.096707, lon=106.509746) | id=3000019
+2026-05-31 00:51:26 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Huyện Củ Chi.
+2026-05-31 00:51:26 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Huyện Củ Chi.
+2026-05-31 00:51:26 | HistoricalBackfiller | INFO     | [21/22] HCM Huyện Nhà Bè (lat=10.651001, lon=106.725864) | id=3000020
+2026-05-31 00:51:41 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Huyện Nhà Bè.
+2026-05-31 00:51:41 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Huyện Nhà Bè.
+2026-05-31 00:51:41 | HistoricalBackfiller | INFO     | [22/22] HCM Huyện Cần Giờ (lat=10.396588, lon=106.908698) | id=3000021
+2026-05-31 00:51:56 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HCM Huyện Cần Giờ.
+2026-05-31 00:51:56 | HistoricalBackfiller | INFO     |   ✓ Loaded HCM Huyện Cần Giờ.
+2026-05-31 00:51:56 | HistoricalBackfiller | INFO     | Backfill complete: 22/22 locations OK, 0 failed.
+2026-05-31 00:51:56 | BasePostgresLoader   | INFO     | PostgreSQL connection closed.
+2026-05-31 00:51:57 | ConfigManager        | INFO     | Successfully loaded/reloaded configurations from disk.
+2026-05-31 00:51:57 | HistoricalBackfiller | INFO     | === Historical Backfill START ===
+    Location prefix : 'HN '
+    Date range      : 2022-08-02 → 2026-05-30
+2026-05-31 00:51:57 | HistoricalBackfiller | INFO     | Backfill config: prefix='HN ' | locations=30 | range=2022-08-02 → 2026-05-30
+2026-05-31 00:51:57 | BasePostgresLoader   | INFO     | Connecting to PostgreSQL database (Attempt 1/3)...
+2026-05-31 00:51:57 | BasePostgresLoader   | INFO     | Connection successful!
+2026-05-31 00:51:57 | HistoricalBackfiller | INFO     | [1/30] HN Quận Ba Đình (lat=21.034709, lon=105.824519) | id=4000000
+2026-05-31 00:52:12 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Ba Đình.
+2026-05-31 00:52:12 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Ba Đình.
+2026-05-31 00:52:12 | HistoricalBackfiller | INFO     | [2/30] HN Quận Bắc Từ Liêm (lat=21.073012, lon=105.761396) | id=4000001
+2026-05-31 00:52:26 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Bắc Từ Liêm.
+2026-05-31 00:52:26 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Bắc Từ Liêm.
+2026-05-31 00:52:26 | HistoricalBackfiller | INFO     | [3/30] HN Quận Cầu Giấy (lat=21.029846, lon=105.791327) | id=4000002
+2026-05-31 00:52:39 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Cầu Giấy.
+2026-05-31 00:52:39 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Cầu Giấy.
+2026-05-31 00:52:39 | HistoricalBackfiller | INFO     | [4/30] HN Quận Đống Đa (lat=21.01451, lon=105.823409) | id=4000003
+2026-05-31 00:52:58 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Đống Đa.
+2026-05-31 00:52:58 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Đống Đa.
+2026-05-31 00:52:58 | HistoricalBackfiller | INFO     | [5/30] HN Quận Hà Đông (lat=20.954071, lon=105.760086) | id=4000004
+2026-05-31 00:53:17 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Hà Đông.
+2026-05-31 00:53:17 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Hà Đông.
+2026-05-31 00:53:17 | HistoricalBackfiller | INFO     | [6/30] HN Quận Hai Bà Trưng (lat=21.005453, lon=105.860623) | id=4000005
+2026-05-31 00:53:32 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Hai Bà Trưng.
+2026-05-31 00:53:32 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Hai Bà Trưng.
+2026-05-31 00:53:32 | HistoricalBackfiller | INFO     | [7/30] HN Quận Hoàn Kiếm (lat=21.030782, lon=105.854063) | id=4000006
+2026-05-31 00:53:44 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Hoàn Kiếm.
+2026-05-31 00:53:44 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Hoàn Kiếm.
+2026-05-31 00:53:44 | HistoricalBackfiller | INFO     | [8/30] HN Quận Hoàng Mai (lat=20.975392, lon=105.85734) | id=4000007
+2026-05-31 00:53:57 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Hoàng Mai.
+2026-05-31 00:53:57 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Hoàng Mai.
+2026-05-31 00:53:57 | HistoricalBackfiller | INFO     | [9/30] HN Quận Long Biên (lat=21.036727, lon=105.898499) | id=4000008
+2026-05-31 00:54:12 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Long Biên.
+2026-05-31 00:54:12 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Long Biên.
+2026-05-31 00:54:12 | HistoricalBackfiller | INFO     | [10/30] HN Quận Nam Từ Liêm (lat=21.018568, lon=105.757613) | id=4000009
+2026-05-31 00:54:26 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Nam Từ Liêm.
+2026-05-31 00:54:26 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Nam Từ Liêm.
+2026-05-31 00:54:26 | HistoricalBackfiller | INFO     | [11/30] HN Quận Tây Hồ (lat=21.06827, lon=105.823961) | id=4000010
+2026-05-31 00:54:40 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Tây Hồ.
+2026-05-31 00:54:40 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Tây Hồ.
+2026-05-31 00:54:40 | HistoricalBackfiller | INFO     | [12/30] HN Quận Thanh Xuân (lat=20.994215, lon=105.819301) | id=4000011
+2026-05-31 00:54:53 | HistoricalBackfiller | INFO     |   Upserted 33552 rows for HN Quận Thanh Xuân.
+2026-05-31 00:54:53 | HistoricalBackfiller | INFO     |   ✓ Loaded HN Quận Thanh Xuân.
+2026-05-31 00:54:53 | HistoricalBackfiller | INFO     | [13/30] HN Thị xã Sơn Tây (lat=21.140451, lon=105.502147) | id=4000012
+2026-05-31 00:54:53 | HistoricalBackfiller | WARNING  |   Weather API status 429. Response: {"error":true,"reason":"Hourly API request limit exceeded. Please try again in the next hour."} Attempt 1/5. Retrying...
+2026-05-31 00:54:53 | HistoricalBackfiller | INFO     |   Sleeping 15s before next attempt...
+2026-05-31 00:55:08 | HistoricalBackfiller | WARNING  |   Weather API status 429. Response: {"reason":"Hourly API request limit exceeded. Please try again in the next hour.","error":true} Attempt 2/5. Retrying...
+2026-05-31 00:55:08 | HistoricalBackfiller | INFO     |   Sleeping 30s before next attempt...
+2026-05-31 00:55:38 | HistoricalBackfiller | WARNING  |   Weather API status 429. Response: {"error":true,"reason":"Hourly API request limit exceeded. Please try again in the next hour."} Attempt 3/5. Retrying...
+2026-05-31 00:55:38 | HistoricalBackfiller | INFO     |   Sleeping 60s before next attempt...
+2026-05-31 00:56:39 | HistoricalBackfiller | WARNING  |   Weather API status 429. Response: {"reason":"Hourly API request limit exceeded. Please try again in the next hour.","error":true} Attempt 4/5. Retrying...
+2026-05-31 00:56:39 | HistoricalBackfiller | INFO     |   Sleeping 120s before next attempt...

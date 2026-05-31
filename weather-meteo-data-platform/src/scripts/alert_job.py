@@ -12,6 +12,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from collections import defaultdict
 import argparse
+import re
 
 # Ensure the src module is discoverable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -97,8 +98,8 @@ class WeatherAlerterJob(BasePostgresLoader):
         # 3. Chia nhỏ tin nhắn nếu quá dài (Bảo vệ lỗi 4096 chars của Telegram)
         final_message = "\n".join(message_lines)
         if len(final_message) > 4000:
-            # Loại bỏ các thẻ HTML an toàn thay vì dùng Regex gây mất dữ liệu
-            clean_text = final_message.replace('<b>', '').replace('</b>', '').replace('<i>', '').replace('</i>', '')
+            # Dùng Regex để loại bỏ TOÀN BỘ thẻ HTML bất kỳ, tránh rủi ro vỡ layout tag khi cắt chuỗi
+            clean_text = re.sub(r'<[^>]+>', '', final_message)
             final_message = clean_text[:4000] + "...\n(Tin nhan qua dai, da bi cat phan cuoi)"
 
         success = self.alerter.send_message(final_message)
@@ -247,7 +248,8 @@ class WeatherAlerterJob(BasePostgresLoader):
         
         final_message = "\n".join(message_lines)
         if len(final_message) > 4000:
-            clean_text = final_message.replace('<b>', '').replace('</b>', '').replace('<i>', '').replace('</i>', '')
+            # Dùng Regex để loại bỏ TOÀN BỘ thẻ HTML bất kỳ, tránh rủi ro vỡ layout tag khi cắt chuỗi
+            clean_text = re.sub(r'<[^>]+>', '', final_message)
             final_message = clean_text[:4000] + "...\n(Tin nhan qua dai, da bi cat phan cuoi)"
 
         self.alerter.send_message(final_message)

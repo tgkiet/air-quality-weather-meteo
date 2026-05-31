@@ -16,6 +16,12 @@ models:
         tests:
           - not_null
 
+      - name: forecast_time_local
+        description: "Mốc thời gian dự báo theo giờ VN (Naive Timestamp). Dành riêng cho biểu đồ Superset ECharts."
+        tests:
+          - not_null
+
+
       - name: latitude
         description: "Vĩ độ (đã làm tròn 4 chữ số thập phân)"
         tests:

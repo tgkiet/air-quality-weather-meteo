@@ -7,10 +7,11 @@ from datetime import datetime, timedelta
 default_args = {
     'owner': 'gkinhere-airflow',
     'description': 'Orchestrator DAG for OpenMeteo Weather & Air Quality ELT pipeline (52 grid-cell locations)',
-    # Airflow tự động retry 3 lần nếu task FAILED, trước khi báo lỗi thật sự.
+    # Airflow mặc định retry 2 lần (áp dụng cho fetch_data và send_alert).
+    # Các task dbt sẽ được override lại số lần retry bên dưới.
     # Quan trọng: Retry vẫn dùng cùng execution_date → Đảm bảo Idempotency.
-    'retries': 3,
-    # Không retry ngay lập tức — chờ 5 phút để API/DB có thể recover.
+    'retries': 2,
+    # Không retry ngay lập tức — chờ 5 phút để mạng/API có thể recover.
     'retry_delay': timedelta(minutes=5),
     'start_date': datetime(2026, 5, 1),
 }
@@ -62,16 +63,18 @@ with DAG(
             '--profiles-dir /home/airflow/.dbt '
             '--vars \'{"execution_date": "{{ logical_date | ts }}"}\''
         ),
+        # Giảm retry xuống 1 lần vì dbt run thi thoảng mới bị kẹt Database Deadlock.
+        retries=1,
     )
 
     # TASK 3: DATA QUALITY GATE — dbt test (Validate)
     # Chạy SAU dbt_run. Nếu test FAILED, Airflow đánh dấu task này là FAILED.
     # Các lần chạy tiếp theo sẽ biết là có vấn đề ở data quality.
     #
-    # 29 data quality tests phủ sóng 3 tầng:
+    # 32 data quality tests phủ sóng 3 tầng:
     #   - Bronze : 7 tests (unique + not_null cho cả 2 bảng Bronze)
     #   - Silver : 8 tests (not_null cho các dimension cốt lõi ở 2 bảng Silver)
-    #   - Gold   : 14 tests (not_null dimensions + accepted_values labels + alerts)
+    #   - Gold   : 17 tests (not_null dimensions + accepted_values labels + alerts)
     dbt_test = BashOperator(
         task_id='dbt_test',
         bash_command=(
@@ -79,6 +82,9 @@ with DAG(
             '--project-dir /opt/airflow/dbt-transform '
             '--profiles-dir /home/airflow/.dbt'
         ),
+        # Dữ liệu rác (lỗi logic) thì không bao giờ tự sửa được bằng cách chờ đợi.
+        # Không retry để DAG fail ngay lập tức, tiết kiệm 5 phút chờ đợi vô ích.
+        retries=0,
     )
 
     # TASK 4: ALERTING — Telegram Alert Job

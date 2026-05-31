@@ -49,7 +49,7 @@ Nếu nhiều module cùng gọi `get_logger("MainPipeline")`, Python trả về
 ## File: `config_manager.py` — `class ConfigManager`
 
 ### Mục đích
-Tách biệt các "Magic Numbers" (con số ma thuật như `timeout=10`, `max_retries=3`) ra khỏi code logic. Theo triết lý **Twelve-Factor App**: cấu hình nên độc lập với code.
+Tách biệt các "Magic Numbers" (con số ma thuật như `timeout_sec=10`, `max_retries=5`) ra khỏi code logic. Theo triết lý **Twelve-Factor App**: cấu hình nên độc lập với code.
 
 ### Singleton Pattern
 ```python

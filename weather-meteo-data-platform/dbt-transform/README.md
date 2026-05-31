@@ -119,13 +119,13 @@ LEFT JOIN air_quality aq
 
 ---
 
-## Data Quality Gates — 29 Tests
+## Data Quality Gates — 32 Tests
 
 | Layer | Số Tests | Coverage |
 |---|---|---|
 | Bronze Sources | 7 | `not_null` id/source_type/execution_date/datetime/lat/lon; `unique` id |
 | Silver | 8 | `not_null` forecast_time/lat/lon/location_name (×2 models) |
-| Gold | 14 | `not_null` key dims + is_weather_alert + temperature_2m; `accepted_values` cho 3 level columns |
+| Gold | 17 | `not_null` key dims + is_weather_alert + temperature_2m + forecast_time_local; `accepted_values` cho 3 level columns |
 
 ```bash
 # Chạy toàn bộ tests
@@ -134,7 +134,7 @@ docker exec airflow_container bash -c \
                --profiles-dir /home/airflow/.dbt"
 
 # Kết quả mong đợi
-# Done. PASS=29 WARN=0 ERROR=0 SKIP=0 TOTAL=29
+# Done. PASS=32 WARN=0 ERROR=0 SKIP=0 TOTAL=32
 ```
 
 ---

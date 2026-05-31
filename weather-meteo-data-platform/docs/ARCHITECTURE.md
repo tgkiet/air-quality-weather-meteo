@@ -52,7 +52,7 @@ Hệ thống áp dụng mô hình **ELT** (Extract → Load → Transform), tác
 | **Bảng** | `api_openmeteo_raw_data` |
 | **Database** | `air_quality_db` |
 | **Kiểu lưu trữ** | JSONB (Binary JSON) |
-| **Cơ chế ghi** | Append-only (chỉ INSERT, không UPDATE/DELETE) |
+| **Cơ chế ghi** | Idempotent UPSERT (ON CONFLICT DO UPDATE) |
 | **Retention** | Vĩnh viễn |
 
 ```sql
@@ -64,7 +64,7 @@ CREATE TABLE api_openmeteo_raw_data (
 );
 ```
 
-> **Tại sao Append-only?** Để bảo toàn toàn bộ lịch sử dữ liệu gốc. Nếu API thay đổi format hoặc có lỗi, ta luôn có thể quay lại Bronze để re-process. Đây là nguyên tắc **Immutable Raw Data** trong Data Engineering.
+> **Tại sao UPSERT?** Để đảm bảo tính Idempotency (Lũy đẳng). Khi Airflow chạy lại (retry) một khoảng thời gian, hệ thống sẽ ghi đè record cũ thay vì tạo ra dữ liệu trùng lặp, giữ cho Bronze Layer luôn sạch và ổn định.
 
 > **Tại sao JSONB?** PostgreSQL JSONB cho phép lưu response API mà không cần schema cứng, đồng thời hỗ trợ index và query trực tiếp vào các field JSON với toán tử `->` và `->>`.
 
@@ -167,7 +167,7 @@ Models dbt trong `models/marts/`:
         ▼
 [BashOperator: dbt_test]
         │ bash_command: "dbt test --project-dir ... --profiles-dir ..."
-        └── Chạy 29 bài Data Quality Tests (NotNull, Unique, AcceptedValues).
+        └── Chạy 32 bài Data Quality Tests (NotNull, Unique, AcceptedValues).
             Nếu Pass → Pipeline SUCCESS. Nếu Fail → Pipeline FAILED.
             
         ▼ (Nếu dbt_test PASS)

@@ -106,6 +106,26 @@ class HistoricalBackfiller(BasePostgresLoader):
                     f"(lat={lat}, lon={lon}) | id={location_id}"
                 )
 
+                # Smart Skip: Tránh tốn API token nếu location đã được backfill đầy đủ.
+                # row_count=0 là default an toàn: nếu connection fail, vẫn sẽ fetch API bình thường.
+                row_count = 0
+                if getattr(self, "connection", None) and not self.connection.closed:
+                    try:
+                        with self.connection.cursor() as cursor:
+                            cursor.execute(
+                                "SELECT COUNT(*) FROM bronze_historical_weather WHERE location_id = %s",
+                                (location_id,)
+                            )
+                            row_count = cursor.fetchone()[0]
+                    except Exception as skip_err:
+                        logger.warning(f"  Skip-check failed for {name}: {skip_err}. Will fetch from API.")
+                        row_count = 0
+
+                if row_count > 30000:
+                    logger.info(f"  ✓ Already fully backfilled ({row_count} rows). Skipping API calls.")
+                    success_count += 1
+                    continue
+
                 try:
                     weather_data = self._fetch_weather_history(lat, lon)
                     time.sleep(1.0)  # polite delay tránh rate limit
@@ -147,7 +167,7 @@ class HistoricalBackfiller(BasePostgresLoader):
     def _fetch_weather_history(self, lat, lon):
         """
         Gọi Open-Meteo Archive API để lấy dữ liệu thời tiết lịch sử.
-        Trả về dict hourly hoặc None nếu thất bại sau 3 lần retry.
+        Trả về dict hourly hoặc None nếu thất bại sau {max_retries} lần retry.
         """
         url    = "https://archive-api.open-meteo.com/v1/archive"
         params = {
@@ -155,8 +175,11 @@ class HistoricalBackfiller(BasePostgresLoader):
             "longitude":  lon,
             "start_date": self.start_date,
             "end_date":   self.end_date,
-            "hourly":     "temperature_2m,relative_humidity_2m,precipitation,rain,"
-                          "wind_speed_10m,wind_direction_10m,pressure_msl",
+            # NOTE: uv_index không có trên Archive API — chỉ có trên Forecast API.
+            # Mọi giá trị nạp vào DB sẽ là NULL 100%. Đã loại bỏ khỏi request.
+            "hourly":     "temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,"
+                          "precipitation,rain,pressure_msl,surface_pressure,cloud_cover,"
+                          "wind_speed_10m,wind_direction_10m,wind_gusts_10m",
             "timezone":   "Asia/Bangkok"
         }
         return self._fetch_with_retry(url, params, label="Weather")
@@ -164,7 +187,7 @@ class HistoricalBackfiller(BasePostgresLoader):
     def _fetch_aq_history(self, lat, lon):
         """
         Gọi Open-Meteo Air Quality API để lấy lịch sử chất lượng không khí.
-        Trả về dict hourly hoặc None nếu thất bại sau 3 lần retry.
+        Trả về dict hourly hoặc None nếu thất bại sau max_retries lần retry.
         AQ API có thể không có data cho một số khu vực → caller xử lý None.
         """
         url    = "https://air-quality-api.open-meteo.com/v1/air-quality"
@@ -173,12 +196,12 @@ class HistoricalBackfiller(BasePostgresLoader):
             "longitude":  lon,
             "start_date": self.start_date,
             "end_date":   self.end_date,
-            "hourly":     "pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone",
+            "hourly":     "pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone,aerosol_optical_depth,dust,uv_index",
             "timezone":   "Asia/Bangkok"
         }
         return self._fetch_with_retry(url, params, label="AirQuality")
 
-    def _fetch_with_retry(self, url: str, params: dict, label: str, max_retries: int = 3):
+    def _fetch_with_retry(self, url: str, params: dict, label: str, max_retries: int = 5):
         """
         Generic HTTP GET với exponential backoff retry.
         Retry cho: network errors và HTTP 429/5xx.
@@ -190,9 +213,19 @@ class HistoricalBackfiller(BasePostgresLoader):
                 if r.status_code == 200:
                     return r.json().get("hourly", {})
                 elif r.status_code == 429 or r.status_code >= 500:
-                    # Rate limit hoặc server error → có thể retry
+                    # Phân biệt Daily Limit (terminal) vs Hourly Limit (transient)
+                    try:
+                        reason = r.json().get("reason", "")
+                    except Exception:
+                        reason = r.text[:100]
+                    if "daily" in reason.lower():
+                        logger.critical(
+                            f"  Daily API limit reached: {reason}. "
+                            f"Stopping — please retry after 07:00 ICT."
+                        )
+                        raise SystemExit(2)
                     logger.warning(
-                        f"  {label} API status {r.status_code}. "
+                        f"  {label} API {r.status_code}: {reason}. "
                         f"Attempt {attempt+1}/{max_retries}. Retrying..."
                     )
                 else:
@@ -247,17 +280,26 @@ class HistoricalBackfiller(BasePostgresLoader):
                 time_str,   # cast bởi SQL template: %s::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'
                 safe_get(weather.get("temperature_2m"),       i),
                 safe_get(weather.get("relative_humidity_2m"), i),
+                safe_get(weather.get("dew_point_2m"),         i),
+                safe_get(weather.get("apparent_temperature"), i),
                 safe_get(weather.get("precipitation"),        i),
                 safe_get(weather.get("rain"),                 i),
+                safe_get(weather.get("pressure_msl"),         i),
+                safe_get(weather.get("surface_pressure"),     i),
+                safe_get(weather.get("cloud_cover"),          i),
                 safe_get(weather.get("wind_speed_10m"),       i),
                 safe_get(weather.get("wind_direction_10m"),   i),
-                safe_get(weather.get("pressure_msl"),         i),
-                safe_get(aq.get("pm10"),              aq_idx),
-                safe_get(aq.get("pm2_5"),             aq_idx),
-                safe_get(aq.get("carbon_monoxide"),   aq_idx),
-                safe_get(aq.get("nitrogen_dioxide"),  aq_idx),
-                safe_get(aq.get("sulphur_dioxide"),   aq_idx),
-                safe_get(aq.get("ozone"),             aq_idx),
+                safe_get(weather.get("wind_gusts_10m"),       i),
+                None,                                             # uv_index: Archive Weather API không cung cấp trường này
+                safe_get(aq.get("pm10"),                  aq_idx),
+                safe_get(aq.get("pm2_5"),                 aq_idx),
+                safe_get(aq.get("carbon_monoxide"),       aq_idx),
+                safe_get(aq.get("nitrogen_dioxide"),      aq_idx),
+                safe_get(aq.get("sulphur_dioxide"),       aq_idx),
+                safe_get(aq.get("ozone"),                 aq_idx),
+                safe_get(aq.get("aerosol_optical_depth"), aq_idx),
+                safe_get(aq.get("dust"),                  aq_idx),
+                safe_get(aq.get("uv_index"),              aq_idx),
                 location_id,
                 lat,
                 lon,
@@ -271,25 +313,36 @@ class HistoricalBackfiller(BasePostgresLoader):
 
         query = """
             INSERT INTO bronze_historical_weather (
-                datetime, temperature_2m, relative_humidity_2m, precipitation, rain,
-                wind_speed_10m, wind_direction_10m, pressure_msl,
+                datetime, temperature_2m, relative_humidity_2m, dew_point_2m, apparent_temperature,
+                precipitation, rain, pressure_msl, surface_pressure, cloud_cover,
+                wind_speed_10m, wind_direction_10m, wind_gusts_10m, uv_index,
                 pm10_cams, pm2_5_cams, carbon_monoxide_cams, nitrogen_dioxide_cams,
-                sulphur_dioxide_cams, ozone_cams, location_id, lat, lon, location_name
+                sulphur_dioxide_cams, ozone_cams, aerosol_optical_depth_cams, dust_cams, aq_uv_index_cams,
+                location_id, lat, lon, location_name
             ) VALUES %s
             ON CONFLICT (datetime, lat, lon) DO UPDATE SET
                 temperature_2m         = EXCLUDED.temperature_2m,
                 relative_humidity_2m   = EXCLUDED.relative_humidity_2m,
+                dew_point_2m           = EXCLUDED.dew_point_2m,
+                apparent_temperature   = EXCLUDED.apparent_temperature,
                 precipitation          = EXCLUDED.precipitation,
                 rain                   = EXCLUDED.rain,
+                pressure_msl           = EXCLUDED.pressure_msl,
+                surface_pressure       = EXCLUDED.surface_pressure,
+                cloud_cover            = EXCLUDED.cloud_cover,
                 wind_speed_10m         = EXCLUDED.wind_speed_10m,
                 wind_direction_10m     = EXCLUDED.wind_direction_10m,
-                pressure_msl           = EXCLUDED.pressure_msl,
+                wind_gusts_10m         = EXCLUDED.wind_gusts_10m,
+                uv_index               = EXCLUDED.uv_index,
                 pm10_cams              = EXCLUDED.pm10_cams,
                 pm2_5_cams             = EXCLUDED.pm2_5_cams,
                 carbon_monoxide_cams   = EXCLUDED.carbon_monoxide_cams,
                 nitrogen_dioxide_cams  = EXCLUDED.nitrogen_dioxide_cams,
                 sulphur_dioxide_cams   = EXCLUDED.sulphur_dioxide_cams,
                 ozone_cams             = EXCLUDED.ozone_cams,
+                aerosol_optical_depth_cams = EXCLUDED.aerosol_optical_depth_cams,
+                dust_cams              = EXCLUDED.dust_cams,
+                aq_uv_index_cams       = EXCLUDED.aq_uv_index_cams,
                 location_id            = EXCLUDED.location_id,
                 location_name          = EXCLUDED.location_name;
         """
@@ -297,8 +350,8 @@ class HistoricalBackfiller(BasePostgresLoader):
         # → Postgres chuyển giờ địa phương về TIMESTAMPTZ (UTC base) đúng chuẩn
         template = (
             "(%s::TIMESTAMP AT TIME ZONE 'Asia/Bangkok', "
-            "%s, %s, %s, %s, %s, %s, %s, "
-            "%s, %s, %s, %s, %s, %s, "
+            "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+            "%s, %s, %s, %s, %s, %s, %s, %s, %s, "
             "%s, %s, %s, %s)"
         )
         try:

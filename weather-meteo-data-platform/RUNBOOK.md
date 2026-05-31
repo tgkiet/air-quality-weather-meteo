@@ -30,22 +30,22 @@ source .env && docker exec -it postgres_container psql -U "$POSTGRES_USER" -d ai
 **2.2. Kéo dữ liệu từ Archive API (2022 - nay)**
 Kéo data tự động cho toàn bộ 52 khu vực (30 HN + 22 HCM). Quá trình mất ~15 phút.
 ```bash
-docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-date 2026-05-29
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-date 2026-05-30
 ```
 
 ```bash
-docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-29
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-30
 ```
 
 ---
 
 ## 3. BIẾN ĐỔI & KIỂM ĐỊNH (dbt Transform & Test)
 
-Dùng dbt để làm sạch (Silver) và gộp bảng (Gold). Chạy 1 lệnh gộp duy nhất để Build & Test (29 Data Quality Gates):
+Dùng dbt để làm sạch (Silver) và gộp bảng (Gold). Chạy 1 lệnh duy nhất để Build & Test (32 Data Quality Gates):
 ```bash
 docker exec airflow_container bash -c "dbt run --full-refresh --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt && dbt test --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt"
 ```
-> *Kỳ vọng: `PASS=29 WARN=0 ERROR=0`*
+> *Kỳ vọng: `PASS=32 WARN=0 ERROR=0`*
 
 ---
 
@@ -60,8 +60,9 @@ docker exec airflow_container bash -c "dbt run --full-refresh --project-dir /opt
 - **Kết nối Database:** 
   1. Settings → Database Connections → + DATABASE → PostgreSQL.
   2. URI: `postgresql+psycopg2://superset_user:<SUPERSET_DB_PASSWORD>@postgres_db:5432/air_quality_db`
-  3. **Advanced → Other → ENGINE PARAMETERS (Sửa lỗi lệch múi giờ 7 tiếng):**
+  3. **Advanced → Other → ENGINE PARAMETERS:**
      `{"connect_args": {"options": "-c timezone=Asia/Bangkok"}}`
+     *(Lưu ý: Cấu hình này sửa lỗi lệch múi giờ khi Gom nhóm/Aggregation. Tuy nhiên, khi vẽ biểu đồ Time-series (ECharts), bạn **BẮT BUỘC** phải chọn cột `forecast_time_local` làm Time Column / Trục X để không bị lỗi lệch 7 tiếng).*
   4. Test Connection → Connect.
 
 ---
@@ -82,3 +83,35 @@ docker compose stop
 > Hãy Backup trước khi chạy: `docker exec postgres_container pg_dump -U gkinhere air_quality_db > backup.sql`
 docker compose down -v && docker compose up -d --build
 ```
+
+---
+
+## 6. DISASTER RECOVERY
+
+> [!IMPORTANT]
+> Sau khi khôi phục database từ backup hoặc rebuild lại volume, **PHẢI** chạy `--full-refresh` để đưa toàn bộ historical data vào Silver layer. Airflow DAG chạy incremental theo giờ **sẽ không tự động restore** historical data.
+
+**6.1. Trình tự khôi phục sau mất dữ liệu hoàn toàn:**
+```bash
+# Bước 1: Backfill historical Bronze (chờ API reset 07:00 ICT nếu cần)
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py \
+  --location-prefix HN --start-date 2022-08-02 --end-date $(date +%Y-%m-%d)
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py \
+  --location-prefix HCM --start-date 2022-08-02 --end-date $(date +%Y-%m-%d)
+
+# Bước 2: Rebuild toàn bộ Silver + Gold từ scratch
+docker exec airflow_container bash -c \
+  "dbt run --full-refresh --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt"
+
+# Bước 3: Validate
+docker exec airflow_container bash -c \
+  "dbt test --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt"
+```
+
+> [!NOTE]
+> Script backfill có **Smart Skip**: Nếu một quận/huyện đã có đủ data trong Bronze (>30,000 rows), nó sẽ được bỏ qua tự động mà không tốn API quota. Lệnh trên an toàn để chạy lại nhiều lần.
+
+**6.2. Open-Meteo API Limit:**
+- **Hourly limit:** Reset sau mỗi 60 phút.
+- **Daily limit:** Reset lúc 00:00 UTC (07:00 ICT). Nếu bị 429 Daily Limit, script sẽ tự dừng ngay (`SystemExit(2)`).
+- Thứ tự an toàn: Chạy HN trước, HCM sau. Mỗi prefix ~30-45 API requests.

@@ -33,11 +33,16 @@ air_quality AS (
 joined AS (
     SELECT
         -- ==========================================
-        -- TIMEZONE CHUẨN (Production-Grade):
-        -- Giữ nguyên định dạng TIMESTAMPTZ để bảo toàn Timezone Semantics.
-        -- Nếu Superset/ECharts bị lệch múi giờ, xử lý bằng SUPERSET_WEBSERVER_TIMEOUT
-        -- hoặc config của Frontend, tuyệt đối không dùng Naive Timestamp Hack ở Tầng Data.
+        -- THỜI GIAN (Time Dimensions)
+        -- ==========================================
+        -- 1. Chuẩn Quốc Tế (TIMESTAMPTZ): Dùng cho Data Science, Machine Learning, và các tool BI chuẩn (Tableau, PowerBI).
         w.forecast_time,
+        
+        -- 2. Naive Timestamp (Giờ địa phương): ⚠️ DÀNH RIÊNG CHO SUPERSET ECHARTS
+        -- Thay vì giữ nguyên TIMESTAMPTZ, ta ép kiểu về Naive Timestamp theo giờ VN.
+        -- LÝ DO: ECharts trên Superset 3.x+ tự động parse UTC và lùi giờ sai lệch.
+        -- LƯU Ý: Chọn cột này làm Trục X (Time Column) trên Superset.
+        w.forecast_time AT TIME ZONE 'Asia/Bangkok' AS forecast_time_local,
         w.latitude,
         w.longitude,
         w.execution_date,
@@ -62,6 +67,10 @@ joined AS (
         w.wind_speed_10m,
         w.wind_direction_10m,
         w.wind_gusts_10m,
+        -- weather_uv_index: có giá trị cho Realtime/Forecast (7 ngày dự báo).
+        -- Với Historical data: Archive Weather API không cung cấp UV → NULL.
+        -- → Dùng COALESCE fallback sang aq_uv_index (từ AQ Archive API, có 99.84% data).
+        -- Đây là best-effort: nguồn ghi rõ trong column comment này.
         w.uv_index                      AS weather_uv_index,
 
         -- ==========================================
@@ -98,14 +107,16 @@ joined AS (
         END                             AS temperature_level,
 
         -- 4b. Phân loại Chỉ số UV (Chuẩn WHO)
-        --     NULL-safe: tương tự temperature
+        -- Ðối với Realtime: dùng weather UV (từ Forecast API).
+        -- Ðối với Historical: Archive Weather API không có UV → fallback sang AQ UV (AQ Archive có data).
+        -- COALESCE chọn giá trị không-NULL đầu tiên: đảm bảo phủ cả 2 trường hợp.
         CASE
-            WHEN w.uv_index IS NULL THEN 'Chưa có dữ liệu'
-            WHEN w.uv_index >= 11   THEN 'Cực kỳ nguy hiểm'
-            WHEN w.uv_index >= 8    THEN 'Rất cao'
-            WHEN w.uv_index >= 6    THEN 'Cao'
-            WHEN w.uv_index >= 3    THEN 'Trung bình'
-            ELSE                         'Thấp'
+            WHEN COALESCE(w.uv_index, aq.uv_index) IS NULL THEN 'Chưa có dữ liệu'
+            WHEN COALESCE(w.uv_index, aq.uv_index) >= 11   THEN 'Cực kỳ nguy hiểm'
+            WHEN COALESCE(w.uv_index, aq.uv_index) >= 8    THEN 'Rất cao'
+            WHEN COALESCE(w.uv_index, aq.uv_index) >= 6    THEN 'Cao'
+            WHEN COALESCE(w.uv_index, aq.uv_index) >= 3    THEN 'Trung bình'
+            ELSE                                                 'Thấp'
         END                             AS uv_level,
 
         -- 4c. Phân loại PM2.5 (Tiêu chuẩn AQI Mỹ - phổ biến nhất)
@@ -120,17 +131,13 @@ joined AS (
         END                             AS pm2_5_level,
 
         -- 4d. Cờ Cảnh báo Thời tiết (Weather Alert Flag)
-        --     LUÔN trả về TRUE/FALSE, KHÔNG BAO GIỜ NULL (phù hợp với not_null test).
-        --     (1) Nhiệt độ >= 38°C → TRUE (temperature luôn có dữ liệu 7 ngày)
-        --            (2) UV >= 8 VÀ UV không NULL → TRUE (guard UV NULL tường minh)
-        --            (3) Mọi trường hợp còn lại → FALSE
-        --     Không dùng `uv_index >= 8 OR temperature >= 38` trực tiếp vì:
-        --     NULL >= 8 → NULL, và NULL OR FALSE → NULL → ELSE bắt → FALSE (ẩn)
-        --     Cách viết tường minh dưới đây không có NULL ngầm ở bất kỳ nhánh nào.
+        --     LUÔN trả về TRUE/FALSE, KHÔNG BAO GIờ NULL (phù hợp với not_null test).
+        --     UV: dùng COALESCE(w.uv_index, aq.uv_index) — cover cả Realtime lẫn Historical.
         CASE
-            WHEN w.temperature_2m >= 38                          THEN TRUE
-            WHEN w.uv_index IS NOT NULL AND w.uv_index >= 8      THEN TRUE
-            ELSE                                                      FALSE
+            WHEN w.temperature_2m >= 38                                                      THEN TRUE
+            WHEN COALESCE(w.uv_index, aq.uv_index) IS NOT NULL
+             AND COALESCE(w.uv_index, aq.uv_index) >= 8                                     THEN TRUE
+            ELSE                                                                                  FALSE
         END                             AS is_weather_alert,
 
         -- 4e. Cờ Cảnh báo Không khí (Air Quality Alert Flag)
@@ -160,9 +167,3 @@ joined AS (
 )
 
 SELECT * FROM joined
--- Xóa ORDER BY — không có tác dụng khi materialized='table'.
--- PostgreSQL không đảm bảo physical storage order, và SELECT sử sau không
--- kế thừa ORDER BY này. Để tăng tốc query, tạo index thay thế:
---   CREATE INDEX ON mart_hourly_conditions(forecast_time);
---   CREATE INDEX ON mart_hourly_conditions(latitude, longitude);
--- Hai index này có thể được thêm vào dưới dạng dbt post-hook trong schema.yml.

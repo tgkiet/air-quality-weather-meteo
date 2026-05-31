@@ -57,7 +57,7 @@ python src/main.py --execution_date "2026-05-27T04:00:00+00:00"
 | Feature | Chi Tiết |
 |---|---|
 | **Session Pooling** | `requests.Session` tái dùng TCP — tránh handshake mỗi request |
-| **Exponential Backoff** | Retry 3 lần: 0s → 2s → 4s. Chỉ retry 429/5xx, không retry 4xx |
+| **Exponential Backoff** | Retry 5 lần: 0s → 2s → 4s... Chỉ retry 429/5xx, không retry 4xx |
 | **Data Contract** | `get_open_meteo_data(params, expected_keys)` — validate schema trước khi return |
 | **Fail-Fast** | `raise` nếu contract fail → Airflow nhận FAILED, không load rác |
 

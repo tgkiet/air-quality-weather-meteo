@@ -112,7 +112,7 @@ docker exec airflow_container \
 | Feature | Align AQ/Weather theo `time_str` dict key, không phải positional index → tránh gán PM2.5 sai giờ |
 | Feature | `safe_get()` guard IndexError khi API trả về array ngắn hơn time array |
 | Feature | `%s::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'` → timezone đúng khi insert vào TIMESTAMPTZ |
-| **Retry** | Exponential backoff: 4xx không retry, 429/5xx retry tối đa 3 lần |
+| **Retry** | Exponential backoff: 4xx không retry, 429/5xx retry tối đa 5 lần |
 | **Idempotent** | `ON CONFLICT (datetime, lat, lon) DO UPDATE` → chạy lại không duplicate |
 
 ### Location ID Offset

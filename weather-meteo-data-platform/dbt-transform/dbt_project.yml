@@ -25,9 +25,21 @@ models:
       +materialized: view       # VIEW ảo: nhẹ, nhanh, không tốn dung lượng ổ cứng
     silver:
       +materialized: incremental # INCREMENTAL: Chỉ ghi dữ liệu MỚI, không quét lại lịch sử
+      # Post-hook: Tạo Index sau mỗi lần dbt run để tăng tốc JOIN và Incremental MERGE.
+      # CREATE INDEX IF NOT EXISTS đảm bảo idempotent — không lỗi khi chạy lại nhiều lần.
+      +post-hook:
+        - "CREATE INDEX IF NOT EXISTS idx_{{ this.name }}_forecast_time  ON {{ this }}(forecast_time)"
+        - "CREATE INDEX IF NOT EXISTS idx_{{ this.name }}_lat_lon        ON {{ this }}(latitude, longitude)"
+        - "CREATE INDEX IF NOT EXISTS idx_{{ this.name }}_location_name  ON {{ this }}(location_name)"
     marts:
       +materialized: table       # TABLE vật lý: Tầng Gold được đọc liên tục bởi BI Tools
       +schema: gold_layer        # Tạo schema RIÊNG BIỆT cho Tầng Gold
                                   # Lý do: Phân tách quyền truy cập (RBAC):
                                   #   - Data Engineer: Có quyền vào silver_layer
                                   #   - Data Analyst:  Chỉ được GRANT SELECT vào gold_layer
+      # Post-hook: Tạo Index sau mỗi lần dbt run (kể cả full-refresh thay thế TABLE).
+      # Superset query thường filter theo forecast_time và group theo location_name.
+      +post-hook:
+        - "CREATE INDEX IF NOT EXISTS idx_{{ this.name }}_forecast_time  ON {{ this }}(forecast_time)"
+        - "CREATE INDEX IF NOT EXISTS idx_{{ this.name }}_lat_lon        ON {{ this }}(latitude, longitude)"
+        - "CREATE INDEX IF NOT EXISTS idx_{{ this.name }}_location_name  ON {{ this }}(location_name)"

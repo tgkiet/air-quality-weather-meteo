@@ -18,18 +18,18 @@ WITH source_data AS (
         datetime                                  AS forecast_time,
         temperature_2m,
         relative_humidity_2m,
-        CAST(NULL AS NUMERIC)                     AS dew_point_2m,
-        CAST(NULL AS NUMERIC)                     AS apparent_temperature,
+        dew_point_2m,
+        apparent_temperature,
         CAST(NULL AS NUMERIC)                     AS precipitation_probability,
         precipitation,
         pressure_msl,
-        CAST(NULL AS NUMERIC)                     AS surface_pressure,
-        CAST(NULL AS NUMERIC)                     AS cloud_cover,
+        surface_pressure,
+        cloud_cover,
         CAST(NULL AS NUMERIC)                     AS visibility,
         wind_speed_10m,
         wind_direction_10m,
-        CAST(NULL AS NUMERIC)                     AS wind_gusts_10m,
-        CAST(NULL AS NUMERIC)                     AS uv_index
+        wind_gusts_10m,
+        uv_index
     FROM {{ source('meteo_bronze', 'bronze_historical_weather') }}
 )
 

@@ -34,6 +34,11 @@
 │    52 locations (30 HN + 22 HCM) × 168h forecast (~8,736 rows/run)     │
 │    lấy dữ liệu độc lập cho toàn bộ các Quận/Huyện             │
 │    location_name | forecast_time | weather | AQ | alert_flags        │
+│                                                                      │
+│    ⚠️ SUPERSET TIMEZONE:                                             │
+│    forecast_time: TIMESTAMPTZ (Chuẩn UTC cho Data Science / ML).     │
+│    forecast_time_local: TIMESTAMP (Naive VN time cho Superset UI).   │
+│    Superset Analyst: LUÔN DÙNG forecast_time_local làm Trục X.       │
 └──────────────────────────────────────────────────────────────────────┘
                              ▼
  ┌────────────────────────────────────────────────────────────┐
@@ -91,7 +96,7 @@ Airflow logical_date ──► main.py --execution_date {logical_date}
     dbt run  ──► 4 Staging VIEWs
               ──► 2 Silver INCREMENTAL (DISTINCT ON, execution_date == var)
               ──► 1 Gold TABLE (LEFT JOIN, derived metrics)
-    dbt test ──► 29 data quality tests (PASS/FAIL)
+    dbt test ──► 32 data quality tests (PASS/FAIL)
 
     ↓ (Consumption Layer)
     alert_job.py    ─► Push: Stateful cronjob báo cáo sáng/tối & Cảnh báo khẩn
@@ -115,7 +120,8 @@ python3 backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-
 
 | Cột | Kiểu | Mô Tả |
 |---|---|---|
-| `forecast_time` | TIMESTAMP | Thời điểm dự báo (Naive - Đã ép về giờ BKK) |
+| `forecast_time` | TIMESTAMPTZ | Thời điểm dự báo (Chuẩn UTC quốc tế) |
+| `forecast_time_local` | TIMESTAMP | Thời điểm dự báo (Naive giờ VN) - Chuyên dùng làm trục X cho Superset |
 | `location_name` | VARCHAR | Tên quận/huyện (HN/HCM prefix) |
 | `latitude`, `longitude` | NUMERIC | Toạ độ canonical từ config |
 | `temperature_2m` | NUMERIC | Nhiệt độ °C |
@@ -227,7 +233,7 @@ weather-meteo-data-platform/
 │
 ├── airflow/                     
 │   ├── README.md
-│   └── dags/orchestrator.py        # DAG @hourly, 4 tasks, retries=3
+│   └── dags/orchestrator.py        # DAG @hourly, 4 tasks, retries tùy chỉnh (2,1,0)
 │
 └── dbt-transform/
     ├── models/
@@ -239,7 +245,7 @@ weather-meteo-data-platform/
 
 ---
 
-## Data Quality Gates (29 dbt Tests)
+## Data Quality Gates (32 dbt Tests)
 
 | Test | Coverage |
 |---|---|

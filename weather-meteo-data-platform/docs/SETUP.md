@@ -39,6 +39,27 @@ _AIRFLOW_WWW_USER_PASSWORD=your_ui_password
 # --- CẤU HÌNH AIRFLOW HỆ THỐNG ---
 AIRFLOW_UID=1000
 AIRFLOW_API_SECRET_KEY=your_random_64_byte_hex_key
+
+# --- CẤU HÌNH SUPERSET ---
+# Database để Superset lưu metadata nội bộ (Dashboard, Chart, User config)
+SUPERSET_DB_NAME=superset_db
+SUPERSET_DB_USER=superset_user
+SUPERSET_DB_PASSWORD=your_superset_db_password
+
+# Secret key bảo mật session — bắt buộc phải có, KHÔNG để trống
+# Sinh key: openssl rand -base64 42
+SUPERSET_SECRET_KEY=your_superset_secret_key
+
+# Tài khoản admin đăng nhập Superset UI (http://localhost:8088)
+# Lưu ý: Mặc định username là 'admin', email là 'admin@superset.com'
+SUPERSET_ADMIN_PASSWORD=your_superset_admin_password
+
+# --- CẤU HÌNH TELEGRAM BOT ---
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_telegram_chat_id
+
+# Cấu hình Vùng Cảnh Báo (Tùy chọn, mặc định là 'HCM ')
+ALERT_TARGET_REGION_PREFIX=HCM 
 ```
 
 ---

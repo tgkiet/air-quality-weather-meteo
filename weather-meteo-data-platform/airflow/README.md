@@ -61,7 +61,7 @@ dbt run --project-dir /opt/airflow/dbt-transform \
 dbt test --project-dir /opt/airflow/dbt-transform \
          --profiles-dir /home/airflow/.dbt
 ```
-- 29 data quality tests
+- 32 data quality tests
 - Pipeline FAIL nếu bất kỳ test nào fail → không publish dữ liệu xấu
 
 **Task 4 — `send_alert`:**

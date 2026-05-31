@@ -328,7 +328,7 @@ Nếu `target.schema = public` và folder = `marts`, dbt tạo `public_marts` �
 
 Macro override này đảm bảo: folder `marts` → schema `gold_layer` (đúng như cấu hình).
 
-### Data Quality Tests — 29 Bài Kiểm Tra Tự Động
+### Data Quality Tests — 32 Bài Kiểm Tra Tự Động
 
 ```
 dbt test chạy sau dbt run. Nếu bất kỳ test nào FAIL → Airflow task FAILED → Alert.
@@ -443,7 +443,7 @@ Do dbt Silver Layer lọc Increment cực kỳ tối ưu dựa trên `execution_
 |---|---|---|
 | 1 | `weather-meteo-data-platform/README.md` | Kiến trúc tổng thể, luồng data, Quick Start |
 | 2 | `weather-meteo-data-platform/src/README.md` | OOP design, Extractor, Loader, Backfill strategy |
-| 3 | `weather-meteo-data-platform/dbt-transform/README.md` | LATERAL unnest, DISTINCT ON, JOIN 1:1, 29 tests |
+| 3 | `weather-meteo-data-platform/dbt-transform/README.md` | LATERAL unnest, DISTINCT ON, JOIN 1:1, 32 tests |
 | 4 | `weather-meteo-data-platform/airflow/README.md` | DAG config, logical_date, FabAuthManager |
 | 5 | `weather-meteo-data-platform/docs/ARCHITECTURE.md` | System diagram, component interactions |
 | 6 | `weather-meteo-data-platform/docs/SETUP.md` | Hướng dẫn chạy từng bước, env variables |
@@ -461,7 +461,7 @@ Do dbt Silver Layer lọc Increment cực kỳ tối ưu dựa trên `execution_
 - [ ] Hiểu tại sao `raise` quan trọng hơn `return None`
 - [ ] Hiểu `is_air_quality_alert = NULL` khác `= FALSE`
 - [ ] Đã chạy xong 5 bước trong `lenhdocker.txt`
-- [ ] `dbt test` trả về `PASS=29 WARN=0 ERROR=0`
+- [ ] `dbt test` trả về `PASS=32 WARN=0 ERROR=0`
 - [ ] Bảng `gold_layer.mart_hourly_conditions` có dữ liệu
 
 ---

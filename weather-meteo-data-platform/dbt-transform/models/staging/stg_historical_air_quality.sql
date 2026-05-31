@@ -19,9 +19,9 @@ WITH source_data AS (
         nitrogen_dioxide_cams                     AS nitrogen_dioxide,
         sulphur_dioxide_cams                      AS sulphur_dioxide,
         ozone_cams                                AS ozone,
-        CAST(NULL AS NUMERIC)                     AS aerosol_optical_depth,
-        CAST(NULL AS NUMERIC)                     AS dust,
-        CAST(NULL AS NUMERIC)                     AS uv_index
+        aerosol_optical_depth_cams                AS aerosol_optical_depth,
+        dust_cams                                 AS dust,
+        aq_uv_index_cams                          AS uv_index
     FROM {{ source('meteo_bronze', 'bronze_historical_weather') }}
 )
 
