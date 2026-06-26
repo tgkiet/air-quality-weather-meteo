@@ -19,7 +19,7 @@ import json
 import time
 import argparse
 import requests
-from datetime import date as _date
+from datetime import date as _date, datetime as _datetime, timedelta as _timedelta
 from psycopg2.extras import execute_values
 from psycopg2 import Error
 
@@ -106,23 +106,54 @@ class HistoricalBackfiller(BasePostgresLoader):
                     f"(lat={lat}, lon={lon}) | id={location_id}"
                 )
 
-                # Smart Skip: Tránh tốn API token nếu location đã được backfill đầy đủ.
-                # row_count=0 là default an toàn: nếu connection fail, vẫn sẽ fetch API bình thường.
-                row_count = 0
+                # Smart Skip: Tránh tốn API token nếu location đã được backfill đầy đủ
+                # CHO ĐÚNG DATE RANGE được request.
+                #
+                # BUG CŨ: Chỉ đếm tổng row của location → bỏ qua backfill dù date range mới
+                #          chưa có data (ví dụ: tắt hệ thống 1 tháng → thiếu dữ liệu tháng đó).
+                #
+                # FIX: Đếm row trong khoảng [start_date, end_date] cụ thể, so với số giờ
+                #      lý thuyết. Nếu đã đủ (>= 95% giờ lý thuyết) → skip.
+                #      row_count=0 là default an toàn: nếu connection fail, vẫn fetch API.
+                skip_this_location = False
                 if getattr(self, "connection", None) and not self.connection.closed:
                     try:
+                        # Số giờ lý thuyết trong range [start_date, end_date] (inclusive)
+                        start_d = _date.fromisoformat(self.start_date)
+                        end_d   = _date.fromisoformat(self.end_date)
+                        expected_hours = (end_d - start_d).days * 24 + 24  # inclusive end date
+
                         with self.connection.cursor() as cursor:
                             cursor.execute(
-                                "SELECT COUNT(*) FROM bronze_historical_weather WHERE location_id = %s",
-                                (location_id,)
+                                """
+                                SELECT COUNT(*) FROM bronze_historical_weather
+                                WHERE location_id = %s
+                                  AND datetime >= %s::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'
+                                  AND datetime <  (%s::DATE + INTERVAL '1 day')::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'
+                                """,
+                                (location_id, self.start_date, self.end_date)
                             )
-                            row_count = cursor.fetchone()[0]
+                            row_count_in_range = cursor.fetchone()[0]
+
+                        # Cho phép thiếu tối đa 5% (missing hours từ API)
+                        threshold = int(expected_hours * 0.95)
+                        if row_count_in_range >= threshold:
+                            logger.info(
+                                f"  ✓ Already backfilled for requested range "
+                                f"({row_count_in_range}/{expected_hours} hours). Skipping API calls."
+                            )
+                            skip_this_location = True
+                        else:
+                            logger.info(
+                                f"  ↻ Incomplete for requested range "
+                                f"({row_count_in_range}/{expected_hours} hours present). "
+                                f"Will fetch from API."
+                            )
                     except Exception as skip_err:
                         logger.warning(f"  Skip-check failed for {name}: {skip_err}. Will fetch from API.")
-                        row_count = 0
+                        skip_this_location = False
 
-                if row_count > 30000:
-                    logger.info(f"  ✓ Already fully backfilled ({row_count} rows). Skipping API calls.")
+                if skip_this_location:
                     success_count += 1
                     continue
 
