@@ -213,7 +213,7 @@ Models dbt trong `models/marts/`:
 | `pressure_msl` | hPa | Áp suất khí quyển |
 | `surface_pressure` | hPa | Áp suất bề mặt |
 | `cloud_cover` | % | Độ phủ mây |
-| `visibility` | m | Tầm nhìn |
+| `visibility` | m | Tầm nhìn (Chỉ có ở Realtime Forecast, NULL ở Historical) |
 | `wind_speed_10m` | km/h | Tốc độ gió |
 | `wind_direction_10m` | ° | Hướng gió |
 | `wind_gusts_10m` | km/h | Gió giật |
