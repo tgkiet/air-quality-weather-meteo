@@ -92,7 +92,11 @@ with DAG(
     # Sử dụng PythonOperator thông qua BashOperator để tránh xung đột dependency nội bộ Airflow.
     send_alert = BashOperator(
         task_id='send_alert',
-        bash_command='python3 /opt/airflow/src/scripts/alert_job.py --execution_date "{{ data_interval_end | ts }}"',
+        # FIX: Dùng logical_date (thời điểm Airflow lên lịch), KHÔNG dùng data_interval_end
+        # (= logical_date + 1h). Lệch 1h có thể gây bỏ sót bản tin 06:00 hoặc 20:00 VN.
+        # Ví dụ: DAG trigger lúc 05:00 UTC (12:00 VN) → data_interval_end = 06:00 UTC (13:00 VN)
+        # → alert_job nhận hour=13 thay vì 12, miss morning_h=6 và evening_h=20.
+        bash_command='python3 /opt/airflow/src/scripts/alert_job.py --execution_date "{{ logical_date | ts }}"',
     )
 
     # TASK DEPENDENCIES - Thứ tự chạy

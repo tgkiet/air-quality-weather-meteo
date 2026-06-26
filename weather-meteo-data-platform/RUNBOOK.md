@@ -109,7 +109,7 @@ docker exec airflow_container bash -c \
 ```
 
 > [!NOTE]
-> Script backfill có **Smart Skip**: Nếu một quận/huyện đã có đủ data trong Bronze (>30,000 rows), nó sẽ được bỏ qua tự động mà không tốn API quota. Lệnh trên an toàn để chạy lại nhiều lần.
+> Script backfill có **Smart Skip**: Nếu một quận/huyện đã có đủ data trong Bronze **cho đúng khoảng thời gian được yêu cầu** (≥ 95% số giờ lý thuyết trong `[start_date, end_date]`), nó sẽ được bỏ qua tự động mà không tốn API quota. Logic này **nhận biết đúng date range** — nếu bạn tắt hệ thống 1 tháng rồi backfill lại đúng khoảng đó, script sẽ phát hiện thiếu data và fetch bình thường. Lệnh trên an toàn để chạy lại nhiều lần (idempotent).
 
 **6.2. Open-Meteo API Limit:**
 - **Hourly limit:** Reset sau mỗi 60 phút.

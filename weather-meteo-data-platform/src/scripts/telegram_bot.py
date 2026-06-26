@@ -172,7 +172,7 @@ class TelegramInteractiveBot(BasePostgresLoader):
                 InlineKeyboardButton("Next 6 Hours", callback_data=f"show_wx{_CB_SEP}6{_CB_SEP}0{_CB_SEP}{db_name}"),
                 InlineKeyboardButton("Next 12 Hours", callback_data=f"show_wx{_CB_SEP}12{_CB_SEP}0{_CB_SEP}{db_name}"),
                 InlineKeyboardButton("Next 24 Hours", callback_data=f"show_wx{_CB_SEP}24{_CB_SEP}0{_CB_SEP}{db_name}"),
-                InlineKeyboardButton("<< Back", callback_data=f"weather{_CB_SEP}{city_prefix}")
+                InlineKeyboardButton("<< Back", callback_data=f"city{_CB_SEP}weather{_CB_SEP}{city_prefix}")
             )
         else:
             kb.add(
