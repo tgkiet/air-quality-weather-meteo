@@ -19,7 +19,7 @@ Hệ thống cung cấp giải pháp toàn diện với:
   - **Medallion Architecture** (Bronze → Silver → Gold)
   - **Idempotency** đầy đủ tại mọi tầng (UPSERT everywhere)
   - **52 Vùng quan trắc (30 Quận/Huyện HN + 22 Quận/Huyện HCM)** lấy trực tiếp 100% từ API, dữ liệu hoàn toàn độc lập và chính xác về mặt địa lý.
-  - **29 Data Quality Tests** tự động qua dbt
+  - **32 Data Quality Tests** tự động qua dbt
   - **Dockerized** hoàn toàn với healthcheck và RBAC-ready schema
 ---
 
@@ -161,6 +161,8 @@ docker exec airflow_container \
     --start-date 2022-08-02 --end-date 2026-05-27
 ```
 
+> 💡 **Mẹo Vá Dữ Liệu (Gap Filling):** Script có tính năng **Smart Skip** tự động bỏ qua nếu data trong khoảng `[start-date, end-date]` đã có sẵn >95%. Nếu bạn bị lủng dữ liệu ở một vài ngày gần đây do tắt máy, hãy **thu hẹp khoảng thời gian** sát với phần bị thiếu (VD: `--start-date 2026-06-01`). Đừng để `start-date` từ tận 2022, vì lượng data cũ quá lớn sẽ làm tỷ lệ >95% và script sẽ skip (bỏ qua) phần bị thiếu của bạn!
+
 >  **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`
 
 ---
@@ -172,7 +174,7 @@ docker exec airflow_container \
 | [weather-meteo-data-platform/README.md](./weather-meteo-data-platform/README.md) | Platform architecture, data flow, Gold layer columns |
 | [src/README.md](./weather-meteo-data-platform/src/README.md) | Extract & Load modules, APIs, backfill strategy |
 | [airflow/README.md](./weather-meteo-data-platform/airflow/README.md) | DAG config, tasks, CLI commands |
-| [dbt-transform/README.md](./weather-meteo-data-platform/dbt-transform/README.md) | Models, materializations, 29 data quality tests |
+| [dbt-transform/README.md](./weather-meteo-data-platform/dbt-transform/README.md) | Models, materializations, 32 data quality tests |
 
 ---
 

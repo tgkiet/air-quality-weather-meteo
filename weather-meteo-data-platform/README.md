@@ -112,6 +112,9 @@ python3 backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-d
 python3 backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date <YYYY-MM-DD>
 ```
 
+> **Mẹo Vá Dữ Liệu (Gap Filling):** Script có tính năng **Smart Skip** tự động bỏ qua nếu data trong khoảng `[start-date, end-date]` đã có sẵn >95%. Nếu bạn bị lủng dữ liệu ở một vài ngày gần đây do tắt máy, hãy **thu hẹp khoảng thời gian** sát với phần bị thiếu (VD: `--start-date 2026-06-01`). Đừng để `start-date` từ tận 2022, vì lượng data cũ quá lớn sẽ làm tỷ lệ >95% và script sẽ skip (bỏ qua) phần bị thiếu của bạn!
+
+
 > ⚠️ **LƯU Ý QUAN TRỌNG VỀ IDEMPOTENCY:** 
 > Do kiến trúc sử dụng `execution_date` để lọc Incremental tại tầng Silver, sau khi chạy script Backfill, Airflow batch bình thường sẽ KHÔNG tự động Merge dữ liệu quá khứ. Bạn **BẮT BUỘC** phải chạy lệnh `dbt run --full-refresh` để nạp toàn bộ lịch sử vào Silver/Gold layer.
 

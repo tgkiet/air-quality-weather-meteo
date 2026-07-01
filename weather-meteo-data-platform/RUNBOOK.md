@@ -30,11 +30,11 @@ source .env && docker exec -it postgres_container psql -U "$POSTGRES_USER" -d ai
 **2.2. Kéo dữ liệu từ Archive API (2022 - nay)**
 Kéo data tự động cho toàn bộ 52 khu vực (30 HN + 22 HCM). Quá trình mất ~15 phút.
 ```bash
-docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-date 2026-05-30
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HN --start-date 2022-08-02 --end-date 2026-06-30
 ```
 
 ```bash
-docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date 2026-05-30
+docker exec airflow_container python3 /opt/airflow/src/scripts/backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-date 2026-06-30
 ```
 
 ---
@@ -109,7 +109,8 @@ docker exec airflow_container bash -c \
 ```
 
 > [!NOTE]
-> Script backfill có **Smart Skip**: Nếu một quận/huyện đã có đủ data trong Bronze **cho đúng khoảng thời gian được yêu cầu** (≥ 95% số giờ lý thuyết trong `[start_date, end_date]`), nó sẽ được bỏ qua tự động mà không tốn API quota. Logic này **nhận biết đúng date range** — nếu bạn tắt hệ thống 1 tháng rồi backfill lại đúng khoảng đó, script sẽ phát hiện thiếu data và fetch bình thường. Lệnh trên an toàn để chạy lại nhiều lần (idempotent).
+> Script backfill có **Smart Skip**: Nếu một quận/huyện đã có đủ data trong Bronze **cho đúng khoảng thời gian được yêu cầu** (≥ 95% số giờ lý thuyết trong `[start_date, end_date]`), nó sẽ được bỏ qua tự động mà không tốn API quota.
+> **Mẹo vá lỗi (Gap Filling):** Đừng backfill từ tận năm 2022 nếu bạn chỉ tắt máy vài ngày! Hãy thu hẹp `--start-date` và `--end-date` sát với những ngày bị thiếu. Nếu bạn để range quá rộng (vd 3 năm), lượng data khổng lồ đã có sẵn sẽ lấn át vài ngày bị thiếu (kéo tỷ lệ lên >95%), khiến Smart Skip bỏ qua toàn bộ và không vá lỗi cho bạn. Lệnh trên an toàn để chạy lại nhiều lần (idempotent).
 
 **6.2. Open-Meteo API Limit:**
 - **Hourly limit:** Reset sau mỗi 60 phút.
