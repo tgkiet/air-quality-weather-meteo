@@ -1,3 +1,31 @@
+x-superset-common: &superset-common
+  image: apache/superset:6.1.0
+  env_file: .env
+  user: root  # Cần thiết để docker-bootstrap.sh tự động cài psycopg2 driver
+  environment:
+    # Fix lỗi lệch 7 tiếng của biến 'now' trong Advanced Filter (ép OS Timezone về GMT+7)
+    TZ: Asia/Bangkok
+    # Map các biến từ .env tổng sang format mà superset_config.py kỳ vọng
+    DATABASE_DIALECT: postgresql
+    DATABASE_USER: ${SUPERSET_DB_USER}
+    DATABASE_PASSWORD: ${SUPERSET_DB_PASSWORD}
+    DATABASE_HOST: postgres_db
+    DATABASE_PORT: 5432
+    DATABASE_DB: ${SUPERSET_DB_NAME}
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    REDIS_CELERY_DB: 0
+    REDIS_RESULTS_DB: 1
+    SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+    ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+  volumes:
+    # Mount CHỈ superset_config.py và requirements-local.txt
+    - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+    - ./superset/requirements-local.txt:/app/docker/requirements-local.txt:ro
+    - superset_home:/app/superset_home
+  networks:
+    - meteo_network
+
 services:
   postgres_db: 
     container_name: postgres_container
@@ -116,36 +144,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # SUPERSET SERVICES (5-Container Architecture from Official Repo)
-  # X-superset-common is an anchor to DRY (Don't Repeat Yourself) the configs
-  x-superset-common: &superset-common
-    image: apache/superset:6.1.0
-    env_file: .env
-    user: root  # Cần thiết để docker-bootstrap.sh tự động cài psycopg2 driver
-    environment:
-      # Fix lỗi lệch 7 tiếng của biến 'now' trong Advanced Filter (ép OS Timezone về GMT+7)
-      TZ: Asia/Bangkok
-      # Map các biến từ .env tổng sang format mà superset_config.py kỳ vọng
-      DATABASE_DIALECT: postgresql
-      DATABASE_USER: ${SUPERSET_DB_USER}
-      DATABASE_PASSWORD: ${SUPERSET_DB_PASSWORD}
-      DATABASE_HOST: postgres_db
-      DATABASE_PORT: 5432
-      DATABASE_DB: ${SUPERSET_DB_NAME}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_CELERY_DB: 0
-      REDIS_RESULTS_DB: 1
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-      ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
-    volumes:
-      # Mount CHỈ superset_config.py và requirements-local.txt
-      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
-      - ./superset/requirements-local.txt:/app/docker/requirements-local.txt:ro
-      - superset_home:/app/superset_home
-    networks:
-      - meteo_network
 
   superset-init:
     <<: *superset-common
