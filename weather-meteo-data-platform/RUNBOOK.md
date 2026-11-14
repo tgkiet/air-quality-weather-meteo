@@ -15,13 +15,13 @@ openssl rand -base64 42
 # Khởi động cụm 7 containers (DB, Redis, Airflow, Superset)
 docker compose up -d --build
 ```
-> *Đợi 2-3 phút. Kiểm tra trạng thái: `docker compose ps`*
+> Kiểm tra trạng thái bằng `docker compose ps`. DAG mới được tạo ở trạng thái pause. Bật DAG sau khi đã điền cấu hình API/bot và kiểm tra stack.
 
 ---
 
 ## 2. NẠP DỮ LIỆU LỊCH SỬ (Data Backfill)
 
-**2.1. Làm sạch dữ liệu cũ (Tùy chọn)**
+**2.1. Làm sạch dữ liệu trên môi trường thử nghiệm (Tùy chọn)**
 Để đập đi xây lại data **KHÔNG mất dữ liệu Dashboard Superset**, chạy lệnh làm trống các bảng gốc:
 ```bash
 source .env && docker exec -it postgres_container psql -U "$POSTGRES_USER" -d air_quality_db -c "TRUNCATE TABLE bronze_historical_weather, api_openmeteo_raw_data, silver_layer.alert_history CASCADE;"
@@ -77,11 +77,6 @@ docker compose logs -f superset
 # Dừng hệ thống (Giữ nguyên Data)
 docker compose stop
 
-# ⚠️ XÓA SẠCH MỌI THỨ (Bao gồm cả Superset Dashboard) ⚠️
-> [!CAUTION]
-> Cờ `-v` sẽ xóa vĩnh viễn Named Volume `postgres_data`, gây mất toàn bộ dữ liệu Data Warehouse thu thập được.
-> Hãy Backup trước khi chạy: `docker exec postgres_container pg_dump -U gkinhere air_quality_db > backup.sql`
-docker compose down -v && docker compose up -d --build
 ```
 
 ---
@@ -116,3 +111,75 @@ docker exec airflow_container bash -c \
 - **Hourly limit:** Reset sau mỗi 60 phút.
 - **Daily limit:** Reset lúc 00:00 UTC (07:00 ICT). Nếu bị 429 Daily Limit, script sẽ tự dừng ngay (`SystemExit(2)`).
 - Thứ tự an toàn: Chạy HN trước, HCM sau. Mỗi prefix ~30-45 API requests.
+
+## Báo cáo chất lượng dữ liệu
+
+Các báo cáo chạy ở chế độ chỉ đọc và xuất CSV. Chạy từ thư mục platform:
+
+```bash
+docker compose exec -T airflow python -m src.scripts.data_report coverage \
+  --city HN --start 2026-07-01 --end 2026-11-13
+
+docker compose exec -T airflow python -m src.scripts.data_report temperature \
+  --city HN --start 2026-11-01 --end 2026-11-14
+
+docker compose exec -T airflow python -m src.scripts.data_report rain \
+  --city HN --start 2026-11-01 --end 2026-11-14
+```
+
+`coverage` xuất cả ngày thiếu hoàn toàn và số giờ có nhiệt độ, PM2.5 trên tổng số giờ kỳ vọng của các điểm cấu hình. `temperature` tính MAE và sai lệch trung bình theo nhóm tầm dự báo 0–24, 24–48 và 48–72 giờ, dùng thời điểm lấy từ Bronze. Mốc thời gian đó là thời điểm hệ thống lấy bản dự báo, không phải giờ khởi tạo mô hình. `rain` đếm cảnh báo đúng, hụt và nhầm theo ngưỡng lượng mưa và xác suất trong cấu hình. Nguồn tham chiếu hiện tại là dữ liệu lịch sử Open-Meteo, không phải số đo trạm. Kết quả chỉ có tiêu đề CSV nghĩa là chưa có đủ cặp dự báo–tham chiếu trong thời gian đã chọn.
+
+## Nâng cấp một stack đã có dữ liệu
+
+1. Build image và chạy test cô lập theo mục bên dưới trước khi đặt lịch bảo trì.
+2. Từ Airflow UI, pause DAG và đợi lượt đang chạy hoàn tất. Dừng bot, Airflow và các tiến trình Superset đang ghi metadata. Nếu stack đang tắt, chỉ khởi động lại container PostgreSQL hiện có để sao lưu.
+3. Tạo bản sao lưu PostgreSQL chứa warehouse, metadata Airflow và Superset bên ngoài repo. File dump chứa dữ liệu vận hành, role và cấu hình kết nối. Lưu riêng khóa Superset dùng để giải mã các kết nối đã lưu.
+4. Áp dụng migration SQL vào DB hiện tại, rồi chạy lại dbt để điền nguồn và thời điểm ingest cho dữ liệu Silver/Gold.
+5. Kiểm tra Airflow, Superset và bot. Bật lại DAG sau khi kiểm tra.
+
+```bash
+docker compose stop airflow telegram_bot superset superset-worker superset-worker-beat
+# Dùng container hiện có để sao lưu trước khi pull/recreate PostgreSQL.
+docker compose start postgres_db
+backup_dir="$HOME/meteo-backups"
+mkdir -p -m 700 "$backup_dir"
+backup_file=$(mktemp "$backup_dir/postgres-before-upgrade.XXXXXX")
+docker compose exec -T postgres_db sh -c 'pg_dumpall -U "$POSTGRES_USER"' > "$backup_file" || exit 1
+test -s "$backup_file" || exit 1
+printf 'Backup: %s\n' "$backup_file"
+
+# Mỗi migration có thể chạy lại trên DB đã áp dụng.
+for migration in src/scripts/migrations/*.sql; do
+  docker compose exec -T postgres_db sh -c \
+    'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$migration" || exit 1
+done
+```
+
+Xác nhận toàn bộ migration thành công trước khi tiếp tục. Khởi động PostgreSQL và Airflow đã nâng cấp, rồi dựng lại Gold và kiểm tra:
+
+```bash
+docker compose pull postgres_db
+docker compose up -d --build --wait postgres_db airflow
+docker compose exec -T airflow dbt build --full-refresh \
+  --project-dir /opt/airflow/dbt-transform --profiles-dir /home/airflow/.dbt
+docker compose up -d --build --wait
+```
+
+Bản full refresh có thể tốn thêm dung lượng tạm. Nếu phải quay lại phiên bản Airflow cũ sau khi chạy migration metadata, dùng bản sao lưu trên một PostgreSQL riêng rồi trỏ image cũ vào bản đã phục hồi. Giữ volume hiện tại làm dữ liệu đối chiếu. Dữ liệu dự báo và dữ liệu nhập lịch sử có cột nguồn riêng. Nếu một giờ có hai nguồn, Silver ưu tiên dự báo. Trong cùng nguồn, batch mới hơn được ưu tiên.
+
+
+## Telegram
+
+Các mốc 06:00 và 20:00 là giờ logic theo múi giờ Việt Nam. Tin nhắn được gửi sau khi các bước thu thập, dbt và kiểm tra dữ liệu hoàn thành. Bản tin cá nhân ở mốc sáng chỉ gửi cho chat riêng đã lưu điểm và bật đăng ký. Cấu hình tài khoản bot và chat broadcast bằng `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`.
+
+Nếu Telegram trả lỗi xác nhận từ chối, tác vụ giải phóng lượt giữ chỗ để Airflow retry. Nếu bị timeout mà chưa biết Telegram đã nhận hay chưa, record vẫn còn trong `silver_layer.telegram_delivery` với `delivered_at IS NULL`. Đối chiếu lịch sử chat trước khi xử lý thủ công. Retry tự động giữ lại trạng thái này để tránh gửi trùng.
+
+## Kiểm tra trên database cô lập
+
+```bash
+docker build -t meteo-checks:local .
+bash tests/verify_airflow.sh meteo-checks:local postgres:16.16-alpine
+bash tests/verify_warehouse.sh meteo-checks:local postgres:16.16-alpine
+```
+
+Các runner dùng network nội bộ và dữ liệu mẫu. CI cũng chạy unit test cho khởi động Airflow, ingest và Telegram. Không cần token hay gọi API bên ngoài.

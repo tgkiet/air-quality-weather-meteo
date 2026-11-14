@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 import argparse
 
 # Ensure the root of the project is in the Python path
@@ -21,11 +20,9 @@ def _inject_location_metadata(data, locations: list):
     This ensures weather and air quality datasets can be joined perfectly in the DB
     without grid snapping mismatches.
 
-    Open-Meteo Batch API không đảm bảo thứ tự response khớp với
-    thứ tự request (API có thể sort/deduplicate coordinates). Match theo tọa độ
-    thực tế của response (làm tròn 2 chữ số) thay vì match theo index.
-
-    Side-effect note: Mutates dicts inside `data` in-place (intentional for performance).
+    The upstream batch response maps to the request order. Grid snapping can
+    return the same coordinate for several requested points, so returned
+    coordinates are kept as source metadata rather than used as join keys.
     """
     items = data if isinstance(data, list) else [data]
 
@@ -37,11 +34,6 @@ def _inject_location_metadata(data, locations: list):
         raise ValueError("Mismatch between requested locations and API response items.")
 
     for item, loc in zip(items, locations):
-        # Open-Meteo đảm bảo thứ tự mảng trả về KHỚP TUYỆT ĐỐI với thứ tự tọa độ gửi lên.
-        # Dù API có snap 2 quận gần nhau về cùng 1 tọa độ (grid cell), vị trí trong mảng vẫn không đổi.
-        # Do đó, chỉ cần gộp (zip) theo đúng index là an toàn 100%.
-        
-        # Ghi đè tọa độ lưới của API bằng tọa độ gốc của chúng ta để làm khóa chính
         item["requested_latitude"]  = loc["latitude"]
         item["requested_longitude"] = loc["longitude"]
         item["location_name"]       = loc["name"]
@@ -117,21 +109,7 @@ def main():
     try:
         loader.connect()
 
-        logger.info("-> Đang Load dữ liệu Thời Tiết...")
-        loader.insert_data(
-            table_name="api_openmeteo_raw_data",
-            source_type="weather_forecast_hourly",
-            execution_date=current_exec_date,
-            raw_json=weather_data
-        )
-
-        logger.info("-> Đang Load dữ liệu Chất lượng không khí...")
-        loader.insert_data(
-            table_name="api_openmeteo_raw_data",
-            source_type="air_quality_hourly",
-            execution_date=current_exec_date,
-            raw_json=aq_data
-        )
+        loader.load_forecast_batch(current_exec_date, weather_data, aq_data)
     finally:
         # finally chạy kể cả khi có exception — đảm bảo không rò rỉ connection
         loader.close()

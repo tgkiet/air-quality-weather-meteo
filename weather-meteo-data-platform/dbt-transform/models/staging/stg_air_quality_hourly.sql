@@ -3,6 +3,7 @@ WITH raw_records AS (
     SELECT
         id AS raw_id,
         CAST(execution_date AS TIMESTAMPTZ) AS execution_date,
+        ingested_at,
         single_json
     FROM {{ source('meteo_bronze', 'api_openmeteo_raw_data') }}
     CROSS JOIN LATERAL (
@@ -33,6 +34,7 @@ source_data AS (
         -- Không có location_name → Dashboard chỉ thấy tọa độ số, không biết tên quận/trạm.
         single_json->>'location_name' AS location_name,
 
+        ingested_at,
         single_json AS raw_json
     FROM raw_records
 ),
@@ -58,7 +60,11 @@ extracted_arrays AS (
         CAST(raw_json->'hourly'->'ozone'->>(t.idx::int - 1) AS NUMERIC)                 AS ozone,
         CAST(raw_json->'hourly'->'aerosol_optical_depth'->>(t.idx::int - 1) AS NUMERIC) AS aerosol_optical_depth,
         CAST(raw_json->'hourly'->'dust'->>(t.idx::int - 1) AS NUMERIC)                  AS dust,
-        CAST(raw_json->'hourly'->'uv_index'->>(t.idx::int - 1) AS NUMERIC)              AS uv_index
+        CAST(raw_json->'hourly'->'uv_index'->>(t.idx::int - 1) AS NUMERIC)              AS uv_index,
+        ingested_at,
+        'forecast'::text AS data_source,
+        CAST(raw_json->>'latitude' AS NUMERIC) AS model_latitude,
+        CAST(raw_json->>'longitude' AS NUMERIC) AS model_longitude
         
     FROM source_data,
     LATERAL jsonb_array_elements_text(raw_json->'hourly'->'time') WITH ORDINALITY AS t(time_str, idx)

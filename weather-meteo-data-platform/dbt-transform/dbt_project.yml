@@ -25,6 +25,8 @@ models:
       +materialized: view       # VIEW ảo: nhẹ, nhanh, không tốn dung lượng ổ cứng
     silver:
       +materialized: incremental # INCREMENTAL: Chỉ ghi dữ liệu MỚI, không quét lại lịch sử
+      +incremental_strategy: forecast_freshness
+      +on_schema_change: append_new_columns
       # Index native dbt cho Silver layer
       +indexes:
         - { columns: ["location_name", "execution_date"] }

@@ -1,27 +1,24 @@
 # 🌤️ Vietnam Weather & Air Quality Data Platform 🍃
 
-> **Enterprise-grade Data Engineering pipeline** - tự động thu thập, chuẩn hóa và phân tích dữ liệu **thời tiết & chất lượng không khí** cho **52 khu vực quan trắc** trên 2 thành phố: **30 Quận/Huyện Hà Nội** và **22 Quận/Huyện TP.HCM**, cập nhật mỗi giờ, lịch sử từ năm 2022.
+> Dự báo thời tiết và PM2.5 theo giờ cho 52 điểm tra cứu ở Hà Nội và TP.HCM. Tra cứu nhanh trên Telegram, xem xu hướng và độ phủ dữ liệu trong Superset.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.13-blue?logo=python" />
-  <img src="https://img.shields.io/badge/Apache%20Airflow-3.2.0-017CEE?logo=apacheairflow" />
-  <img src="https://img.shields.io/badge/dbt-1.9.0-FF694B?logo=dbt" />
+  <img src="https://img.shields.io/badge/Apache%20Airflow-3.4.0-017CEE?logo=apacheairflow" />
+  <img src="https://img.shields.io/badge/dbt-1.12.7-FF694B?logo=dbt" />
   <img src="https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql" />
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker" />
 </p>
 
 ---
 
-## 🌟 Giới Thiệu
-Dự án này là một **Data Platform hoàn chỉnh (End-to-End)**, sử dụng Modern Data Stack để xây dựng luồng xử lý dữ liệu chuẩn mức Enterprise. Nền tảng được tối ưu hóa để thu thập, xử lý và lưu trữ dữ liệu thời tiết và chất lượng không khí với độ bao phủ cao.
+## Dự án dùng để làm gì?
 
-Hệ thống cung cấp giải pháp toàn diện với:
-  - **Medallion Architecture** (Bronze → Silver → Gold)
-  - **Idempotency** đầy đủ tại mọi tầng (UPSERT everywhere)
-  - **52 Vùng quan trắc (30 Quận/Huyện HN + 22 Quận/Huyện HCM)** lấy trực tiếp 100% từ API, dữ liệu hoàn toàn độc lập và chính xác về mặt địa lý.
-  - **32 Data Quality Tests** tự động qua dbt
-  - **Dockerized** hoàn toàn với healthcheck và RBAC-ready schema
----
+- Tra cứu mưa, nhiệt độ và bụi mịn trong các giờ tiếp theo để lên kế hoạch trong ngày.
+- Theo dõi độ phủ theo ngày và so sánh dự báo nhiệt độ đã lưu với dữ liệu tham chiếu.
+- Chạy một pipeline Python → PostgreSQL → dbt với Airflow điều phối và kiểm tra chất lượng dữ liệu.
+
+Các điểm tra cứu là tọa độ yêu cầu tới Open-Meteo. Dữ liệu PM2.5 là dự báo mô hình CAMS Global với lưới khoảng 45 km. Nhiều điểm có thể cùng dùng một ô lưới. Chỉ số PM2.5 được hiển thị theo µg/m³. Nguồn: [Open-Meteo](https://open-meteo.com/en/docs/air-quality-api) và [CAMS Global](https://ads.atmosphere.copernicus.eu/datasets/cams-global-atmospheric-composition-forecasts).
 
 ## Kiến Trúc Tổng Quan
 
@@ -60,34 +57,20 @@ Hệ thống cung cấp giải pháp toàn diện với:
 │   └─ Khẩn cấp (giờ khác): Quét đột xuất 6 giờ tới           │
 └─────────────────────────────────────────────────────────────┘
 
-**Stack:** Python · Apache Airflow 3.2.0 · dbt 1.9.0 · PostgreSQL 16 · Docker Compose
+**Stack:** Python · Apache Airflow 3.4.0 · dbt 1.12.7 · PostgreSQL 16 · Docker Compose
 
 ```
 ---
 
-## Consumption Layer (Telegram Bot & Alert)
+## Bot và dashboard
 
-Hệ thống giao tiếp với người dùng qua kiến trúc **Dual-Core Bot** (Data-as-a-Product):
-- **Pull Bot (Interactive)**: Hỗ trợ người dùng chủ động tra cứu thời tiết với menu **Phân trang (Pagination)**. Giao diện được tối ưu bằng **State Editing** (luôn giữ 1 tin nhắn duy nhất). Chịu tải cao và triệt tiêu độ trễ (<1ms) nhờ kiến trúc **Stateless Direct Database Connection** kết hợp **dbt Native Indexes**.
-- **Push Bot (Holistic Briefing & Sudden Alert)**:
-  - **Bản tin Định kỳ (06:00 & 20:00)**: Tổng hợp đồng thời 4 rủi ro lớn (Mưa, Bụi mịn PM2.5, Tia UV, Nắng gắt) cho Ngày/Ngày mai. Hỗ trợ **Phân lớp Cảnh báo** (Mưa lớn >=5.0mm, Mưa vừa >=3.0mm).
-  - **System Heartbeat**: Gửi bản tin "Thời tiết lý tưởng" nếu hệ thống an toàn, đảm bảo Observability.
-  - **Cảnh báo Đột xuất (Khung giờ còn lại)**: Nhìn trước 6H để bám sát thời tiết. Tích hợp **Stateful Deduplication**, đảm bảo cảnh báo khẩn cấp chỉ réo tên người dùng đúng 1 lần cho 1 sự kiện, chống spam tuyệt đối.
+- Trong chat riêng, dùng `/location` để lưu điểm, `/briefing` để xem mưa trong 6 giờ và nhiệt độ/PM2.5 trong 24 giờ, `/subscribe` hoặc `/unsubscribe` để quản lý bản tin sáng. Dữ liệu quá 3 giờ được hiển thị là cũ hoặc thiếu theo từng nguồn.
+- [Dashboard Superset mẫu](./weather-meteo-data-platform/superset/demo/README.md) có bộ lọc thành phố và điểm tra cứu, dùng dữ liệu giả lập để trình diễn.
+- [Runbook](./weather-meteo-data-platform/RUNBOOK.md) có lệnh báo cáo độ phủ và sai số nhiệt độ trên dữ liệu sẵn có trong PostgreSQL.
 
----
+## Phạm vi dữ liệu
 
-## Phạm Vi Dữ Liệu
-
-| | Hà Nội | TP.HCM |
-|---|---|---|
-| **Locations** | 30 Quận/Huyện | 22 Quận/Huyện |
-| **Lịch sử** | 2022-08-02 → Hiện tại (Archive API) | 2022-08-02 → 2026-05-27 (Archive API) |
-| **Realtime** | Dự báo 7 ngày tới (cập nhật mỗi giờ) | Dự báo 7 ngày tới (cập nhật mỗi giờ) |
-| **Nguồn** | Open-Meteo Archive API (100% API-driven) | Open-Meteo Forecast + Archive API |
-
->  **Kiến trúc API-Driven:** Hệ thống lấy dữ liệu trực tiếp từ Open-Meteo Archive API cho toàn bộ 52 Quận/Huyện chuẩn hành chính của 2 thành phố, đảm bảo dữ liệu đồng nhất từ 2022 đến nay.
-
----
+Danh mục có 30 điểm Hà Nội và 22 điểm TP.HCM. Tên địa điểm là nhãn tra cứu đang dùng trong dự án. API thời tiết mặc định trả 7 ngày dự báo và API chất lượng không khí mặc định trả 5 ngày. Pipeline lấy dữ liệu mỗi giờ khi Airflow hoạt động. Độ phủ lịch sử phụ thuộc các đợt backfill đã chạy, vì vậy hãy xem báo cáo độ phủ trước khi dùng dữ liệu để phân tích một giai đoạn.
 
 ## Cấu Trúc Repository
 
@@ -139,7 +122,7 @@ cp .env.example .env   # Chỉnh sửa credentials
 
 # Khởi động toàn bộ hệ thống
 docker compose up -d --build
-# Postgres healthcheck xong → Airflow tự động start (không race condition)
+# Mở Airflow ở localhost:8080, kiểm tra health rồi bật DAG khi sẵn sàng.
 
 # Truy cập Airflow UI
 open http://localhost:8080
@@ -163,7 +146,7 @@ docker exec airflow_container \
 
 > 💡 **Mẹo Vá Dữ Liệu (Gap Filling):** Script có tính năng **Smart Skip** tự động bỏ qua nếu data trong khoảng `[start-date, end-date]` đã có sẵn >95%. Nếu bạn bị lủng dữ liệu ở một vài ngày gần đây do tắt máy, hãy **thu hẹp khoảng thời gian** sát với phần bị thiếu (VD: `--start-date 2026-06-01`). Đừng để `start-date` từ tận 2022, vì lượng data cũ quá lớn sẽ làm tỷ lệ >95% và script sẽ skip (bỏ qua) phần bị thiếu của bạn!
 
->  **Reset hoàn toàn:** `docker compose down -v && docker compose up -d --build`
+> Xem [Runbook](./weather-meteo-data-platform/RUNBOOK.md) để nâng cấp DB hiện có và kiểm tra bản sao lưu trước khi thay đổi volume.
 
 ---
 
@@ -182,14 +165,14 @@ docker exec airflow_container \
 
 | Nguyên Tắc | Giải Pháp |
 |---|---|
-| **Idempotency** | UPSERT + `execution_date` từ Airflow `logical_date` |
+| **Idempotency** | Hai nguồn Bronze ghi cùng transaction theo khóa batch. Silver ưu tiên dữ liệu đúng nguồn và batch mới hơn. |
 | **Strict index matching** | Map API response → config location theo index, chống lỗi Grid Snapping |
-| **52 Vùng quan trắc** | Tọa độ chuẩn hành chính từ Nominatim (OpenStreetMap), độc lập về mặt không gian |
+| **52 Vùng quan trắc** | Tọa độ tra cứu cố định. Giữ riêng tọa độ mô hình trả về để giải thích độ phân giải. |
 | **Time alignment** | AQ/Weather ghép theo `time_str` dict key, không theo array index |
 | **UNION ALL safety** | Explicit column list (đúng thứ tự) ở cả hai bên |
 | **NULL safety** | `IS NULL` guard tường minh trước mọi CASE comparison |
 | **Fail-fast** | `raise` thay vì `return` → Airflow nhận đúng FAILED signal |
-| **Zero Hardcode** | Configurations nằm toàn bộ trong JSON (Hybrid: Fail-Fast cho cấu trúc, Resilient cho mạng) |
+| **Cấu hình** | Danh mục điểm và ngưỡng bot nằm trong JSON. Quy tắc phân loại trong mart nằm trong dbt. |
 
 ---
 

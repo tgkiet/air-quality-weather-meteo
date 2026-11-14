@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: meteo_bronze
     description: "Lớp dữ liệu thô (Bronze Layer) được lấy từ API Open-Meteo và load vào Postgres bởi Airflow."
-    database: air_quality_db
+    database: "{{ target.database }}"
     schema: public
 
     tables:

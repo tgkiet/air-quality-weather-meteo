@@ -13,16 +13,20 @@ from zoneinfo import ZoneInfo
 from collections import defaultdict
 import argparse
 import re
+from html import escape
 
 # Ensure the src module is discoverable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from src.loaders.base_loader import BasePostgresLoader
-from src.utils.telegram_alerter import TelegramAlerter
+from src.utils.telegram_alerter import TelegramAlerter, TelegramDeliveryError
 from src.utils.logger import get_logger
 from src.utils.config_manager import config_manager
 from psycopg2.extras import RealDictCursor, execute_values
-from psycopg2 import Error
+from src.scripts.bot_services import (
+    AQ_BATCH_JOIN, AQ_FRESH, BotDatabaseManager, BotFormatter, FRESHNESS_HOURS,
+    WEATHER_BATCH_JOIN, WEATHER_FRESH,
+)
 
 logger = get_logger("AlertJob")
 
@@ -43,81 +47,90 @@ class WeatherAlerterJob(BasePostgresLoader):
             raise ValueError(f"Missing region prefix in config: {e}")
         self.bkk_tz = ZoneInfo('Asia/Bangkok')
 
-    def group_and_send_messages(self, records, title, alert_type, is_stateful=False):
-        """Hàm dùng chung để gom nhóm thời gian (Time-range Grouping) và gửi tin nhắn Telegram."""
-        if not records:
-            logger.info(f"[{title}] No records found.")
-            return
+    def _delivery_id(self, kind, chat_id=None):
+        return f"{kind}:{chat_id or self.alerter.chat_id}:{self.exec_date.timestamp():.0f}"
 
-        # 1. Gom nhóm theo Quận (location_name)
-        grouped_data = defaultdict(list)
-        for r in records:
-            # Rút gọn tên quận cho dễ nhìn trên điện thoại
-            loc = r['location_name'].replace("Thành phố ", "TP.").replace("Thị xã ", "TX.").replace("Quận ", "Q.").replace("Huyện ", "H.")
-            grouped_data[loc].append(r)
+    def _send_once(self, kind, message, *, chat_id=None, rain_keys=(), parse_mode="HTML"):
+        delivery_id = self._delivery_id(kind, chat_id)
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT to_regclass('silver_layer.telegram_delivery')")
+            if cursor.fetchone()[0] is None:
+                # Existing instances can send while the optional delivery migration is pending.
+                self.alerter.send_message(message, chat_id=chat_id, parse_mode=parse_mode)
+                if rain_keys:
+                    self._reserve_rain(cursor, rain_keys)
+                self.connection.commit()
+                return
 
-        # Sử dụng thẻ pre và code của HTML để format (loại bỏ emoji)
-        message_lines = [f"<b>{title}</b>", "============================="]
-        insert_history_records = []
+            cursor.execute("""
+                INSERT INTO silver_layer.telegram_delivery (delivery_id)
+                VALUES (%s) ON CONFLICT DO NOTHING RETURNING delivery_id
+            """, (delivery_id,))
+            if cursor.fetchone() is None:
+                cursor.execute("SELECT delivered_at FROM silver_layer.telegram_delivery WHERE delivery_id = %s",
+                               (delivery_id,))
+                delivered = cursor.fetchone()[0] is not None
+                self.connection.commit()
+                if delivered:
+                    return
+                raise TelegramDeliveryError("Previous Telegram delivery status unknown; review before retrying")
+            if rain_keys:
+                execute_values(cursor, """
+                    INSERT INTO silver_layer.alert_history (location_name, forecast_time, alert_type, delivery_id)
+                    VALUES %s ON CONFLICT DO NOTHING
+                """, [(*key, delivery_id) for key in rain_keys])
+        # Commit before contacting Telegram. A read timeout or process crash can
+        # occur after delivery, so an unacknowledged claim always needs review.
+        self.connection.commit()
+        try:
+            self.alerter.send_message(message, chat_id=chat_id, parse_mode=parse_mode)
+        except TelegramDeliveryError as error:
+            if error.retryable:
+                with self.connection.cursor() as cursor:
+                    if rain_keys:
+                        cursor.execute("DELETE FROM silver_layer.alert_history WHERE delivery_id = %s",
+                                       (delivery_id,))
+                    cursor.execute("DELETE FROM silver_layer.telegram_delivery WHERE delivery_id = %s",
+                                   (delivery_id,))
+                self.connection.commit()
+            raise
+        with self.connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE silver_layer.telegram_delivery SET delivered_at = NOW() WHERE delivery_id = %s
+            """, (delivery_id,))
+        self.connection.commit()
 
-        # 2. Xử lý logic gộp giờ
-        for loc, rows in grouped_data.items():
-            start_ft = rows[0]['forecast_time']
-            end_ft = rows[-1]['forecast_time']
-            if start_ft.tzinfo is not None: start_ft = start_ft.astimezone(self.bkk_tz)
-            if end_ft.tzinfo is not None: end_ft = end_ft.astimezone(self.bkk_tz)
-            start_time = start_ft.strftime("%H:%M")
-            end_time = end_ft.strftime("%H:%M")
-            time_range = f"{start_time} - {end_time}" if start_time != end_time else f"{start_time}"
-            
-            if alert_type == "RAIN":
-                max_rain_record = max(rows, key=lambda r: float(r['precipitation']))
-                max_rain = float(max_rain_record['precipitation'])
-                max_prob = max_rain_record['precipitation_probability']
-                peak_time = max_rain_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
-                
-                rain_type = "Mưa lớn" if max_rain >= 5.0 else "Mưa vừa"
-                message_lines.append(f"[Mưa] {loc} ({time_range}) | Đỉnh điểm lúc {peak_time} ({max_rain:.1f} mm, Tỉ lệ: <b>{max_prob}%</b>)")
-            elif alert_type == "AQI":
-                max_aq_record = max(rows, key=lambda r: float(r['pm2_5']))
-                max_pm25 = float(max_aq_record['pm2_5'])
-                level = max_aq_record['pm2_5_level']
-                peak_time = max_aq_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
-                
-                alert_tag = "[CẢNH BÁO]" if "Nguy hiểm" in level or "Không lành mạnh" in level else "[THÔNG TIN]"
-                message_lines.append(f"{alert_tag} <b>{loc}</b> | Xấu nhất lúc {peak_time} (PM2.5: {max_pm25:.1f} µg/m³ - {level})")
+    @staticmethod
+    def _reserve_rain(cursor, keys):
+        execute_values(cursor, """
+            INSERT INTO silver_layer.alert_history (location_name, forecast_time, alert_type)
+            VALUES %s ON CONFLICT DO NOTHING
+        """, keys)
 
-            # Chuẩn bị dữ liệu ghi lịch sử (nếu là dạng khẩn cấp chống spam)
-            if is_stateful:
-                for r in rows:
-                    insert_history_records.append((r['location_name'], r['forecast_time'], alert_type))
+    @staticmethod
+    def _short_message(message):
+        if len(message) <= 4000:
+            return message
+        txt = re.sub(r"<[^>]+>", "", message)
+        return txt[:3800] + "\n… Mở /weather để xem chi tiết.\nNguồn dự báo: Open-Meteo / CAMS."
 
-        message_lines.append("=============================")
-        message_lines.append("<i>Sử dụng /menu với Bot để xem chi tiết từng Quận.</i>")
-
-        # 3. Chia nhỏ tin nhắn nếu quá dài (Bảo vệ lỗi 4096 chars của Telegram)
-        final_message = "\n".join(message_lines)
-        if len(final_message) > 4000:
-            # Dùng Regex để loại bỏ TOÀN BỘ thẻ HTML bất kỳ, tránh rủi ro vỡ layout tag khi cắt chuỗi
-            clean_text = re.sub(r'<[^>]+>', '', final_message)
-            final_message = clean_text[:4000] + "...\n(Tin nhan qua dai, da bi cat phan cuoi)"
-
-        success = self.alerter.send_message(final_message)
-
-        # 4. Commit State nếu là Alert Khẩn cấp
-        if success and is_stateful and insert_history_records:
-            insert_query = """
-                INSERT INTO silver_layer.alert_history (location_name, forecast_time, alert_type)
-                VALUES %s
-                ON CONFLICT (location_name, forecast_time, alert_type) DO NOTHING;
-            """
-            with self.connection.cursor() as cursor:
-                execute_values(cursor, insert_query, insert_history_records)
-            self.connection.commit()
-            logger.info(f"[{title}] Successfully updated alert_history.")
-        elif is_stateful and not success:
-            self.connection.rollback()
-            logger.error(f"[{title}] Failed to send alert. State rollback applied.")
+    def _send_rain_alert(self, records, title):
+        by_location = defaultdict(list)
+        for row in records:
+            by_location[row["location_name"]].append(row)
+        lines = [f"<b>{escape(title)}</b>"]
+        sent_keys = []
+        for location, rows in by_location.items():
+            peak = max(rows, key=lambda row: row["precipitation"])
+            peak_time = peak["forecast_time"].astimezone(self.bkk_tz).strftime("%H:%M %d/%m")
+            line = (f"{escape(location)} · {peak_time} · {peak['precipitation']:.1f} mm"
+                    f" · {peak['precipitation_probability']}%")
+            if sum(len(item) + 1 for item in lines) + len(line) > 3800:
+                break
+            lines.append(line)
+            sent_keys.extend((row["location_name"], row["forecast_time"], "RAIN") for row in rows)
+        if sent_keys:
+            self._send_once("rain", "\n".join(lines + ["Nguồn dự báo: Open-Meteo."]), rain_keys=sent_keys)
 
     def run_holistic_briefing(self, is_morning=True, start_hour=6):
         window_name = "HÔM NAY" if is_morning else "NGÀY MAI"
@@ -135,37 +148,50 @@ class WeatherAlerterJob(BasePostgresLoader):
         start_interval = f"{start_hour} hours" if is_morning else "1 day"
         end_interval = "1 day" if is_morning else "2 days"
         
-        query = """
-            SELECT location_name, forecast_time, precipitation_probability, precipitation,
-                   pm2_5, pm2_5_level, is_air_quality_alert, weather_uv_index, apparent_temperature
-            FROM gold_layer.mart_hourly_conditions
-            WHERE forecast_time >= (((%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')::DATE + CAST(%s AS INTERVAL)) AT TIME ZONE 'Asia/Bangkok')
-              AND forecast_time < (((%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')::DATE + CAST(%s AS INTERVAL)) AT TIME ZONE 'Asia/Bangkok')
-              AND location_name LIKE %s
-            ORDER BY location_name ASC, forecast_time ASC;
+        query = f"""
+            SELECT g.location_name, g.forecast_time,
+                   g.precipitation_probability, g.precipitation,
+                   CASE WHEN {AQ_FRESH} THEN aq.pm2_5 END AS pm2_5,
+                   COALESCE({AQ_FRESH} AND aq.pm2_5 >= %s, FALSE) AS is_air_quality_alert,
+                   g.weather_uv_index, g.apparent_temperature
+            FROM gold_layer.mart_hourly_conditions AS g
+            {WEATHER_BATCH_JOIN}
+            {AQ_BATCH_JOIN}
+            WHERE {WEATHER_FRESH}
+              AND g.forecast_time >= (((%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')::DATE + CAST(%s AS INTERVAL)) AT TIME ZONE 'Asia/Bangkok')
+              AND g.forecast_time < (((%s::TIMESTAMPTZ AT TIME ZONE 'Asia/Bangkok')::DATE + CAST(%s AS INTERVAL)) AT TIME ZONE 'Asia/Bangkok')
+              AND g.location_name LIKE %s
+            ORDER BY g.location_name ASC, g.forecast_time ASC;
         """
         prefix_val = self.scheduled_region_prefix.strip()
         prefix = prefix_val + ' %' if prefix_val else '%'
         
         with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(query, (self.exec_date.isoformat(), start_interval, self.exec_date.isoformat(), end_interval, prefix))
+            cursor.execute(query, (
+                float(thresholds["pm25_alert_ugm3"]), self.exec_date.isoformat(), start_interval,
+                self.exec_date.isoformat(), end_interval, prefix,
+            ))
             records = cursor.fetchall()
             
         title_region = f" ({prefix_val})" if prefix_val else ""
-        title = f"BẢN TIN THỜI TIẾT {window_name}{title_region}"
+        title = escape(f"BẢN TIN THỜI TIẾT {window_name}{title_region}")
+        kind = "morning" if is_morning else "evening"
             
         if not records:
-            logger.info(f"No records found for {window_name}.")
-            msg = f"<b>{title}</b>\n=============================\nThời tiết lý tưởng, không có dữ liệu để cảnh báo rủi ro.\nChúc bạn một ngày tuyệt vời!\n=============================\n<i>(Hệ thống tự động)</i>"
-            self.alerter.send_message(msg)
+            self._send_once(kind, f"<b>{title}</b>\nChưa đủ dữ liệu dự báo mới cho khoảng thời gian này.")
             return
-            
+
+        grouped_records = defaultdict(list)
+        for record in records:
+            grouped_records[record["location_name"]].append(record)
+
         alerts = defaultdict(list)
-        for loc in sorted(list(set(r['location_name'] for r in records))):
-            loc_records = [r for r in records if r['location_name'] == loc]
-            
-            # Rain
-            rain_records = [r for r in loc_records if r['precipitation'] >= rain_mm and r['precipitation_probability'] >= rain_prob]
+        for loc, loc_records in sorted(grouped_records.items()):
+            rain_records = [
+                row for row in loc_records if row["precipitation"] is not None
+                and row["precipitation_probability"] is not None
+                and row["precipitation"] >= rain_mm and row["precipitation_probability"] >= rain_prob
+            ]
             if rain_records:
                 start_time = rain_records[0]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
                 end_time = rain_records[-1]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
@@ -179,7 +205,7 @@ class WeatherAlerterJob(BasePostgresLoader):
                 rain_type = "Mưa lớn" if max_rain >= 5.0 else "Mưa vừa"
                 alerts[loc].append(f"[Mưa] {rain_type}{t_str}: To nhất lúc {peak_time} ({max_rain:.1f}mm, Tỉ lệ {max_prob}%)")
                 
-            # AQI
+            # PM2.5
             aqi_records = [r for r in loc_records if r['is_air_quality_alert']]
             if aqi_records:
                 start_time = aqi_records[0]['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
@@ -188,10 +214,9 @@ class WeatherAlerterJob(BasePostgresLoader):
                 
                 max_aq_record = max(aqi_records, key=lambda x: float(x['pm2_5']))
                 max_pm25 = float(max_aq_record['pm2_5'])
-                max_level = max_aq_record['pm2_5_level']
                 peak_time = max_aq_record['forecast_time'].astimezone(self.bkk_tz).strftime("%H:%M")
                 
-                alerts[loc].append(f"[Bụi mịn]{t_str}: Đỉnh điểm lúc {peak_time} (PM2.5: {max_pm25:.1f} - {max_level})")
+                alerts[loc].append(f"[Bụi mịn]{t_str}: Đỉnh điểm lúc {peak_time} (PM2.5: {max_pm25:.1f} µg/m³)")
                 
             # UV & Heat
             heat_records = [r for r in loc_records if (r['apparent_temperature'] is not None and r['apparent_temperature'] >= heat_alert) or (r['weather_uv_index'] is not None and r['weather_uv_index'] >= uv_alert)]
@@ -214,11 +239,14 @@ class WeatherAlerterJob(BasePostgresLoader):
                 
                 alerts[loc].append(f"[Nắng gắt]{t_str}: " + ", ".join(insight_parts))
 
+        source = "Nguồn dự báo mô hình: Open-Meteo / CAMS."
         if not alerts:
-            msg = f"<b>{title}</b>\n=============================\nThời tiết lý tưởng, không có cảnh báo rủi ro (Mưa lớn/Bụi mịn/Nắng gắt).\nChúc bạn một ngày tuyệt vời!\n=============================\n<i>(Hệ thống tự động)</i>"
-            self.alerter.send_message(msg)
+            self._send_once(
+                kind,
+                f"<b>{title}</b>\nKhông ghi nhận mức cảnh báo trong dữ liệu hiện có.\n{source}",
+            )
             return
-            
+
         message_lines = [f"<b>{title}</b>", "============================="]
         
         # Generate Global Insight
@@ -239,20 +267,54 @@ class WeatherAlerterJob(BasePostgresLoader):
         for loc, loc_alerts in alerts.items():
             if not loc_alerts: continue
             short_loc = loc.replace("Thành phố ", "TP.").replace("Thị xã ", "TX.").replace("Quận ", "Q.").replace("Huyện ", "H.")
-            message_lines.append(f"<b>{short_loc}</b>:")
+            message_lines.append(f"<b>{escape(short_loc)}</b>:")
             for a in loc_alerts:
                 message_lines.append(f" - {a}")
         
         message_lines.append("=============================")
         message_lines.append("<i>Sử dụng /menu với Bot để xem chi tiết.</i>")
         
+        message_lines.append(source)
         final_message = "\n".join(message_lines)
-        if len(final_message) > 4000:
-            # Dùng Regex để loại bỏ TOÀN BỘ thẻ HTML bất kỳ, tránh rủi ro vỡ layout tag khi cắt chuỗi
-            clean_text = re.sub(r'<[^>]+>', '', final_message)
-            final_message = clean_text[:4000] + "...\n(Tin nhan qua dai, da bi cat phan cuoi)"
+        parse_mode = "HTML" if len(final_message) <= 4000 else None
+        self._send_once(kind, self._short_message(final_message), parse_mode=parse_mode)
 
-        self.alerter.send_message(final_message)
+    def send_personal_briefings(self):
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT to_regclass('silver_layer.telegram_delivery')")
+            if cursor.fetchone()[0] is None:
+                return
+            cursor.execute("""
+                SELECT chat_id, home_location, language
+                FROM silver_layer.bot_user_preferences
+                WHERE daily_briefing AND home_location IS NOT NULL
+                ORDER BY chat_id
+            """)
+            subscribers = cursor.fetchall()
+        if not subscribers:
+            return
+
+        thresholds = config_manager.alert_thresholds
+        formatter = BotFormatter(
+            thresholds["rain_probability_pct"], thresholds["rain_mm"],
+            thresholds["pm25_alert_ugm3"], self.bkk_tz,
+        )
+        db = BotDatabaseManager(self)
+        locations = {item["name"] for item in config_manager.locations}
+        forecasts = {}
+        failures = 0
+        for chat, location, language in subscribers:
+            if location not in locations:
+                continue
+            if location not in forecasts:
+                forecasts[location] = db.query_briefing(location)
+            message = formatter.fmt_briefing(location, forecasts[location], language)
+            try:
+                self._send_once("daily", message, chat_id=chat, parse_mode=None)
+            except TelegramDeliveryError:
+                failures += 1
+        if failures:
+            raise TelegramDeliveryError(f"Daily briefing failed for {failures} recipient(s)")
 
     def run_sudden_alert(self):
         """Cảnh báo Đột xuất - Chạy các khung giờ còn lại. Chỉ nhìn 6H tới. Stateful chống Spam."""
@@ -263,15 +325,17 @@ class WeatherAlerterJob(BasePostgresLoader):
         except KeyError as e:
             raise ValueError(f"Missing rain thresholds in config: {e}")
         
-        query = """
+        query = f"""
             SELECT g.location_name, g.forecast_time, g.precipitation_probability, g.precipitation
             FROM gold_layer.mart_hourly_conditions g
+            {WEATHER_BATCH_JOIN}
             LEFT JOIN silver_layer.alert_history ah 
                 ON g.location_name = ah.location_name 
                 AND g.forecast_time = ah.forecast_time 
                 AND ah.alert_type = 'RAIN'
-            WHERE g.forecast_time >= %s::TIMESTAMPTZ
-              AND g.forecast_time <= %s::TIMESTAMPTZ + INTERVAL '6 hours'
+            WHERE {WEATHER_FRESH}
+              AND g.forecast_time >= now()
+              AND g.forecast_time < now() + INTERVAL '6 hours'
               AND g.precipitation >= %s 
               AND g.precipitation_probability >= %s
               AND g.location_name LIKE %s
@@ -281,13 +345,24 @@ class WeatherAlerterJob(BasePostgresLoader):
         prefix_val = self.sudden_region_prefix.strip()
         prefix = prefix_val + ' %' if prefix_val else '%'
         with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(query, (self.exec_date.isoformat(), self.exec_date.isoformat(), rain_mm, rain_prob, prefix))
+            # Serialize overlapping claims for this project before reading history.
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtext('meteo_rain_alert'))")
+            cursor.execute("SELECT to_regclass('silver_layer.telegram_delivery') AS delivery_table")
+            if cursor.fetchone()["delivery_table"] is not None:
+                cursor.execute("SELECT delivered_at FROM silver_layer.telegram_delivery WHERE delivery_id = %s",
+                               (self._delivery_id("rain"),))
+                previous = cursor.fetchone()
+                if previous is not None:
+                    if previous["delivered_at"] is None:
+                        raise TelegramDeliveryError("Previous rain alert delivery status unknown; review before retrying")
+                    return
+            cursor.execute(query, (rain_mm, rain_prob, prefix))
             records = cursor.fetchall()
         
         if records:
             title_region = f" ({prefix_val})" if prefix_val else ""
-            title = f"CẢNH BÁO KHẨN: MƯA LỚN ĐỘT XUẤT TRONG 6H TỚI{title_region}"
-            self.group_and_send_messages(records, title, "RAIN", is_stateful=True)
+            title = f"CẢNH BÁO MƯA TRONG 6 GIỜ TỚI{title_region}"
+            self._send_rain_alert(records, title)
         else:
             logger.info("No sudden alerts detected in the next 6 hours.")
 
@@ -295,8 +370,8 @@ class WeatherAlerterJob(BasePostgresLoader):
         self.connect()
         try:
             now_utc = datetime.now(ZoneInfo('UTC'))
-            if (now_utc - self.exec_date).total_seconds() > 86400:
-                logger.info("This is a historical backfill run (> 24 hours old). Skipping Telegram alerts to prevent SPAM.")
+            if (now_utc - self.exec_date).total_seconds() > FRESHNESS_HOURS * 3600:
+                logger.info("Skipping a run whose logical time is too old for live alerts.")
                 return
 
             try:
@@ -313,13 +388,21 @@ class WeatherAlerterJob(BasePostgresLoader):
             if current_hour == evening_h:
                 self.run_holistic_briefing(is_morning=False)
             elif current_hour == morning_h:
-                self.run_holistic_briefing(is_morning=True, start_hour=morning_h)
+                try:
+                    self.run_holistic_briefing(is_morning=True, start_hour=morning_h)
+                except TelegramDeliveryError:
+                    self.connection.rollback()
+                    self.send_personal_briefings()
+                    raise
+                self.send_personal_briefings()
             else:
                 self.run_sudden_alert()
 
+            self.connection.commit()
         except Exception as e:
             logger.error(f"Error in alert job: {e}")
             self.connection.rollback()
+            raise
         finally:
             self.close()
 

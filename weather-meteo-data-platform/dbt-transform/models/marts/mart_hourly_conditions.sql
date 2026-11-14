@@ -119,7 +119,7 @@ joined AS (
             ELSE                                                 'Thấp'
         END                             AS uv_level,
 
-        -- 4c. Phân loại PM2.5 (Tiêu chuẩn AQI Mỹ - phổ biến nhất)
+        -- 4c. Phân loại nồng độ PM2.5 theo ngưỡng nội bộ
         --     NULL-safe: pm2_5 có thể NULL ở ngày 6-7
         CASE
             WHEN aq.pm2_5 IS NULL THEN 'Chưa có dữ liệu'
@@ -148,7 +148,16 @@ joined AS (
             WHEN aq.pm2_5 IS NULL THEN NULL  -- Chưa có dự báo, không kết luận
             WHEN aq.pm2_5 >= 55   THEN TRUE  -- Ô nhiễm nặng → Cảnh báo
             ELSE                        FALSE -- Trong ngưỡng an toàn
-        END                             AS is_air_quality_alert
+        END                             AS is_air_quality_alert,
+        w.ingested_at                   AS weather_ingested_at,
+        w.data_source                   AS weather_source,
+        w.model_latitude                AS weather_model_latitude,
+        w.model_longitude               AS weather_model_longitude,
+        aq.execution_date               AS air_quality_execution_date,
+        aq.ingested_at                   AS air_quality_ingested_at,
+        aq.data_source                   AS air_quality_source,
+        aq.model_latitude                AS air_quality_model_latitude,
+        aq.model_longitude               AS air_quality_model_longitude
 
     FROM weather AS w
     -- LEFT JOIN: Giữ lại toàn bộ 7 ngày Thời tiết.

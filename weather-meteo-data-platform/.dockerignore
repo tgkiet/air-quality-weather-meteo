@@ -1,0 +1,6 @@
+# The application and dbt project are mounted at runtime.
+**
+!requirements_airflow.txt
+!airflow/
+!airflow/start.sh
+!airflow/metadata_url.py

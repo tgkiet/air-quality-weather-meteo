@@ -1,10 +1,47 @@
+x-superset-common: &superset-common
+  image: apache/superset:6.1.0
+  user: root  # Cần thiết để docker-bootstrap.sh tự động cài psycopg2 driver
+  environment:
+    # Fix lỗi lệch 7 tiếng của biến 'now' trong Advanced Filter (ép OS Timezone về GMT+7)
+    TZ: Asia/Bangkok
+    # Map các biến từ .env tổng sang format mà superset_config.py kỳ vọng
+    DATABASE_DIALECT: postgresql
+    DATABASE_USER: ${SUPERSET_DB_USER}
+    DATABASE_PASSWORD: ${SUPERSET_DB_PASSWORD}
+    DATABASE_HOST: postgres_db
+    DATABASE_PORT: 5432
+    DATABASE_DB: ${SUPERSET_DB_NAME}
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    REDIS_CELERY_DB: 0
+    REDIS_RESULTS_DB: 1
+    SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+    ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+    SUPERSET_LOG_LEVEL: ${SUPERSET_LOG_LEVEL:-INFO}
+  volumes:
+    - type: bind
+      source: ./superset/superset_config.py
+      target: /app/pythonpath/superset_config.py
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./superset/requirements-local.txt
+      target: /app/docker/requirements-local.txt
+      read_only: true
+      bind:
+        create_host_path: false
+    - superset_home:/app/superset_home
+  networks:
+    - meteo_network
+
 services:
-  postgres_db: 
+  postgres_db:
     container_name: postgres_container
-    image: postgres:16-alpine
+    image: postgres:16.16-alpine
     restart: unless-stopped
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -18,14 +55,16 @@ services:
       SUPERSET_DB_NAME: ${SUPERSET_DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./src/scripts/init_dbs.sh:/docker-entrypoint-initdb.d/init_dbs.sh
+      - ./src/scripts/init_dbs.sh:/docker-entrypoint-initdb.d/init_dbs.sh:ro
+      - ./src/scripts/migrations/001_historical_columns.sql:/docker-entrypoint-initdb.d/migration_001_historical_columns.sql:ro
+      - ./src/scripts/migrations/002_bot_preferences_and_delivery.sql:/docker-entrypoint-initdb.d/migration_002_bot_preferences_and_delivery.sql:ro
     networks:
       - meteo_network
     # INFRA-1 FIX: Thêm healthcheck để đảm bảo Postgres thực sự READY trước khi
     # Airflow container khởi động. depends_on mặc định chỉ đợi container start,
     # không đợi Postgres accept connections → airflow db migrate chạy quá sớm sẽ fail.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,15 +74,25 @@ services:
     container_name: airflow_container
     build: .
     ports:
-      - "8080:8080"
-    env_file:
-      - .env
+      - "127.0.0.1:8080:8080"
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres_db:5432/${AIRFLOW_DB_NAME}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      AIRFLOW_DB_NAME: ${AIRFLOW_DB_NAME}
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN_CMD: python3 /opt/airflow/metadata_url.py
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'True'
       AIRFLOW__CORE__AUTH_MANAGER: 'airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager'
+      AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SECRET_KEY}
+      AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-${AIRFLOW_API_SECRET_KEY}}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_HOST: postgres_db
       POSTGRES_PORT: 5432
+      DBT_TARGET_SCHEMA: ${DBT_TARGET_SCHEMA:-silver_layer}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
       # QUALITY-6 FIX: Set biến rõ ràng để logger.py phát hiện môi trường Docker
@@ -54,7 +103,6 @@ services:
       - ./airflow/logs:/opt/airflow/logs
       - ./src:/opt/airflow/src
       - ./dbt-transform:/opt/airflow/dbt-transform
-      - ./.env:/opt/airflow/.env:ro
       - ./.dbt/profiles.yml:/home/airflow/.dbt/profiles.yml:ro
     depends_on:
       postgres_db:
@@ -62,38 +110,28 @@ services:
         condition: service_healthy
     networks:
       - meteo_network
-    # Lý do dùng `airflow users list | grep -q`:
-    # `airflow users create` trả về exit code 1 khi user đã tồn tại (FabAuthManager).
-    # Dùng `users create || true` sẽ nuốt cả lỗi thực sự (DB down, permission denied).
-    # Pattern check-then-create là cách duy nhất đúng cho cả 2 trường hợp:
-    #   - Lần chạy đầu tiên  : user chưa tồn tại → tạo mới.
-    #   - Lần restart tiếp theo: user đã tồn tại → bỏ qua, tiếp tục khởi động.
-    #   - DB unreachable      : `users list` fail → toàn bộ command fail → container crash
-    #     (đây là hành vi ĐÚNG — không bao giờ khởi động scheduler khi DB chưa sẵn sàng).
     restart: unless-stopped
-    command: >
-      bash -c "
-        airflow db migrate &&
-        (airflow users list 2>/dev/null | grep -q -w \"${_AIRFLOW_WWW_USER_USERNAME}\" || airflow users create --username \"${_AIRFLOW_WWW_USER_USERNAME}\" --password \"${_AIRFLOW_WWW_USER_PASSWORD}\" --firstname Kiet --lastname Admin --role Admin --email giakiet.work@gmail.com) &&
-        airflow scheduler &
-        airflow triggerer &
-        airflow dag-processor &
-        airflow api-server &
-        wait -n
-      "
+    command: ["bash", "/opt/airflow/start.sh"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8080/api/v2/monitor/health', timeout=5)); raise SystemExit(any(data.get(component, {}).get('status') != 'healthy' for component in ('metadatabase', 'scheduler', 'triggerer', 'dag_processor')))"]
+      interval: 30s
+      timeout: 8s
+      retries: 4
+      start_period: 90s
 
   telegram_bot:
     container_name: telegram_bot_container
     build: .
-    env_file: .env
     environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_HOST: postgres_db
       POSTGRES_PORT: 5432
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       RUNNING_IN_DOCKER: "true"
     volumes:
       - ./src:/opt/airflow/src
-      - ./.env:/opt/airflow/.env:ro
     depends_on:
       postgres_db:
         condition: service_healthy
@@ -105,8 +143,6 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis:/data
     networks:
@@ -116,36 +152,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # SUPERSET SERVICES (5-Container Architecture from Official Repo)
-  # X-superset-common is an anchor to DRY (Don't Repeat Yourself) the configs
-  x-superset-common: &superset-common
-    image: apache/superset:6.1.0
-    env_file: .env
-    user: root  # Cần thiết để docker-bootstrap.sh tự động cài psycopg2 driver
-    environment:
-      # Fix lỗi lệch 7 tiếng của biến 'now' trong Advanced Filter (ép OS Timezone về GMT+7)
-      TZ: Asia/Bangkok
-      # Map các biến từ .env tổng sang format mà superset_config.py kỳ vọng
-      DATABASE_DIALECT: postgresql
-      DATABASE_USER: ${SUPERSET_DB_USER}
-      DATABASE_PASSWORD: ${SUPERSET_DB_PASSWORD}
-      DATABASE_HOST: postgres_db
-      DATABASE_PORT: 5432
-      DATABASE_DB: ${SUPERSET_DB_NAME}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_CELERY_DB: 0
-      REDIS_RESULTS_DB: 1
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-      ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
-    volumes:
-      # Mount CHỈ superset_config.py và requirements-local.txt
-      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
-      - ./superset/requirements-local.txt:/app/docker/requirements-local.txt:ro
-      - superset_home:/app/superset_home
-    networks:
-      - meteo_network
 
   superset-init:
     <<: *superset-common
@@ -163,7 +169,7 @@ services:
     command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
     restart: unless-stopped
     ports:
-      - "8088:8088"
+      - "127.0.0.1:8088:8088"
     depends_on:
       superset-init:
         condition: service_completed_successfully

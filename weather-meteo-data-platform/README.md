@@ -61,7 +61,7 @@
 | Orchestration | Apache Airflow | 3.2.0 | DAG `@hourly`, task retry, idempotency |
 | Extract | Python (OOP) | 3.13 | Batch API call, strict index matching (zip) |
 | Storage | PostgreSQL | 16 | 3-tầng Bronze/Silver/Gold, JSONB, UNIQUE constraints |
-| Transform | dbt-core | 1.9.0 | LATERAL unnest, DISTINCT ON dedup, LEFT JOIN |
+| Transform | dbt-core | 1.12.7 | LATERAL unnest, DISTINCT ON dedup, LEFT JOIN |
 | Infrastructure | Docker Compose | 2.x | Healthcheck, service dependency, DRY YAML anchors |
 | Visualization | Apache Superset | 6.1.0 | 5-Container Architecture (App, Init, Worker, Beat, Redis) |
 | Alerting & UI | pyTelegramBotAPI | 4.20.0 | Dual-Core Bot (Interactive Pull + Stateful Push), Max-Ping UX |
@@ -132,7 +132,7 @@ python3 backfill_history.py --location-prefix HCM --start-date 2022-08-02 --end-
 | `pm2_5`, `pm10` | NUMERIC | Nồng độ hạt mịn µg/m³ |
 | `temperature_level` | VARCHAR | Mát mẻ/Dễ chịu/Nóng/Rất nóng/Nguy hiểm |
 | `uv_level` | VARCHAR | Thấp/Trung bình/Cao/Rất cao/Cực kỳ nguy hiểm |
-| `pm2_5_level` | VARCHAR | Tốt/Trung bình/.../Nguy hiểm (AQI Mỹ) |
+| `pm2_5_level` | VARCHAR | Mức theo ngưỡng PM2.5 nội bộ của dự án |
 | `is_weather_alert` | BOOLEAN | TRUE khi temp≥38°C HOẶC UV≥8. KHÔNG NULL. |
 | `is_air_quality_alert` | BOOLEAN\|NULL | TRUE khi PM2.5≥55. NULL = chưa có dữ liệu |
 | `execution_date` | TIMESTAMPTZ | Airflow logical_date — dùng cho lineage |
@@ -203,7 +203,7 @@ Hệ thống sử dụng Bot Telegram làm giao diện Data-as-a-Product với c
   - Bản tin quét đồng thời 4 rủi ro lớn: **Bụi mịn (PM2.5), Tia UV, Nắng gắt (Heatwave), và Mưa**. 
 - **Layered Alerts (Phân lớp Cảnh báo)**: Không chỉ là nhị phân (Có/Không), thuật toán tự động phân loại mức độ Mưa (Mưa vừa: >=2.0mm vs Mưa lớn: >=5.0mm) để người dùng có quyết định hành động tương xứng (chống Spam).
 - **System Heartbeat**: Nếu ngày mai/hôm nay thời tiết hoàn hảo, Bot vẫn phát 1 thông báo "Trời đẹp" để DevOps/Người dùng biết rằng Pipeline Airflow và hệ thống Bot vẫn đang sống (Health Check ngầm định).
-- **Zero Hardcode**: Toàn bộ mốc cảnh báo (VD: PM2.5 >55, UV >8.0) và giờ phát thanh được tách hoàn toàn ra khỏi Python và dbt, khóa chặt trong `config_runtime_constant.json`.
+- **Cấu hình cảnh báo**: Bot đọc lịch và các ngưỡng vận hành từ `config_runtime_constant.json`. Mart áp dụng phân loại PM2.5 và thời tiết trong SQL.
 
 ---
 
@@ -275,4 +275,4 @@ weather-meteo-data-platform/
 ---
 
 ## API Data Completeness
-Dữ liệu được khai thác độc lập cho **52 khu vực (30 HN + 22 HCM)** với độ chính xác cao nhất từ Open-Meteo API. Pipeline đã loại bỏ toàn bộ dữ liệu CSV rác và lỗi thời để chuyển sang 100% tự động hóa.
+Pipeline lấy dữ liệu mô hình từ Open-Meteo cho **52 điểm tra cứu (30 HN + 22 HCM)**. Các điểm gần nhau có thể dùng chung ô lưới CAMS Global. Xem [dashboard mẫu](./superset/demo/README.md) và [báo cáo độ phủ](./RUNBOOK.md).

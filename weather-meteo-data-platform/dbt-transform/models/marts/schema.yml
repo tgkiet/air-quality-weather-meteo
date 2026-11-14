@@ -38,6 +38,27 @@ models:
         tests:
           - not_null
 
+      - name: weather_ingested_at
+        description: "Giờ nạp dữ liệu thời tiết vào Bronze. Để trống nếu dòng Silver cũ chưa được xử lý lại."
+
+      - name: weather_source
+        description: "Loại dữ liệu thời tiết: forecast hoặc historical."
+
+      - name: air_quality_execution_date
+        description: "Mốc batch Airflow của dữ liệu không khí dự báo, hoặc giờ nạp dữ liệu lịch sử."
+
+      - name: air_quality_ingested_at
+        description: "Giờ nạp dữ liệu chất lượng không khí vào Bronze. Có thể NULL khi không có dữ liệu ghép."
+
+      - name: air_quality_source
+        description: "Loại dữ liệu không khí: forecast hoặc historical."
+
+      - name: air_quality_model_latitude
+        description: "Vĩ độ do API chất lượng không khí trả về, khác với vĩ độ điểm tra cứu."
+
+      - name: air_quality_model_longitude
+        description: "Kinh độ do API chất lượng không khí trả về, khác với kinh độ điểm tra cứu."
+
       # ── WEATHER METRICS ───────────────────────────────────────────────────
       - name: temperature_2m
         description: "Nhiệt độ 2m (°C)"
@@ -69,7 +90,7 @@ models:
 
       - name: pm2_5_level
         description: >
-          Phân loại nồng độ PM2.5 theo chuẩn AQI Mỹ (µg/m³):
+          Phân loại nồng độ PM2.5 theo ngưỡng nội bộ (µg/m³):
           Tốt (<12) / Trung bình (12-35) / Không lành mạnh (35-55) /
           Rất không lành mạnh (55-150) / Nguy hiểm (≥150).
           Trả về 'Chưa có dữ liệu' nếu ngoài tầm dự báo CAMS (~ngày 6-7).
@@ -91,7 +112,7 @@ models:
       - name: is_air_quality_alert
         description: >
           Cờ cảnh báo chất lượng không khí (TRUE/FALSE/NULL).
-          TRUE  = PM2.5 >= 55 µg/m³ (Ô nhiễm nặng - AQI "Rất không lành mạnh").
-          FALSE = PM2.5 < 55 µg/m³ (Trong ngưỡng an toàn).
+          TRUE  = PM2.5 >= 55 µg/m³ (đạt ngưỡng cảnh báo nội bộ).
+          FALSE = PM2.5 < 55 µg/m³ (dưới ngưỡng cảnh báo nội bộ).
           NULL  = Chưa có dữ liệu dự báo (ngày 6-7).
           Lưu ý: NULL ≠ FALSE. Dashboard nên hiển thị 'N/A' thay vì tích xanh.
