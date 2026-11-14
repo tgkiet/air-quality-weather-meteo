@@ -9,8 +9,6 @@ WITH source_data AS (
         -- ingested_at được dùng thành execution_date vì historical data
         -- không chạy qua Airflow nên không có logical_date. Ý nghĩa: "thời điểm
         -- dữ liệu này được nạp vào hệ thống", không phải "thời điểm Airflow lên lịch".
-        -- Silver model dùng execution_date để sort priority — càng mới càng ưu tiên.
-        -- Realtime data luôn có execution_date > historical data → đương đúng.
         ingested_at                               AS execution_date,
         ROUND(CAST(lat AS NUMERIC), 4)            AS latitude,
         ROUND(CAST(lon AS NUMERIC), 4)            AS longitude,
@@ -29,7 +27,8 @@ WITH source_data AS (
         wind_speed_10m,
         wind_direction_10m,
         wind_gusts_10m,
-        uv_index
+        uv_index,
+        ingested_at
     FROM {{ source('meteo_bronze', 'bronze_historical_weather') }}
 )
 
@@ -59,5 +58,9 @@ SELECT
     wind_speed_10m,
     wind_direction_10m,
     wind_gusts_10m,
-    uv_index
+    uv_index,
+    ingested_at,
+    'historical'::text AS data_source,
+    NULL::numeric AS model_latitude,
+    NULL::numeric AS model_longitude
 FROM source_data

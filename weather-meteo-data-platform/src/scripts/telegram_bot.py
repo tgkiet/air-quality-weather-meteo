@@ -3,9 +3,8 @@ telegram_bot.py  –  Interactive Pull Bot (Dual-Core Architecture, Pull side).
 
 Design principles:
   - Strict OOP: Controller pattern separating presentation and database logic.
-  - Zero hardcode: thresholds and district list from config_manager.
-  - Exact DB matching via index-based callback_data ("weather|3")
-    → eliminates ILIKE ambiguity.
+  - Read thresholds and locations from the same config as ingestion.
+  - Use exact location names for new callbacks; preserve old index buttons.
   - Bilingual Support (EN/VI) with user preference stored in DB.
   - Provides practical human-readable insights alongside raw data.
 """
@@ -15,6 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+import psycopg2
 import requests
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -45,15 +45,19 @@ class TelegramInteractiveBot(BasePostgresLoader):
         thresholds = config_manager.alert_thresholds
         try:
             self.cities             = bot_cfg["cities"]
-            self.districts          = bot_cfg["districts"]
+            self.legacy_districts   = bot_cfg.get("districts", [])
             rain_prob_threshold     = int(thresholds["rain_probability_pct"])
             rain_mm_threshold       = float(thresholds["rain_mm"])
             pm25_alert_threshold    = float(thresholds["pm25_alert_ugm3"])
         except KeyError as e:
             raise ValueError(f"Missing required telegram_bot config: {e}")
 
+        self.districts = {
+            location["name"]: location["name"].split(" ", 1)[1]
+            for location in config_manager.locations
+        }
         if not self.districts:
-            raise ValueError("No districts configured in telegram_bot.districts.")
+            raise ValueError("No forecast locations are configured.")
 
         # Initialize modular services
         self.db = BotDatabaseManager(self)
@@ -79,7 +83,12 @@ class TelegramInteractiveBot(BasePostgresLoader):
     def _register_slash_commands(self) -> None:
         url = f"https://api.telegram.org/bot{self.bot_token}/setMyCommands"
         commands = [
-            {"command": "start",   "description": "Language & Guide / Đổi ngôn ngữ & HD"},
+            {"command": "start", "description": "Start / Bắt đầu"},
+            {"command": "language", "description": "Language / Ngôn ngữ"},
+            {"command": "briefing", "description": "24h briefing / Bản tin 24 giờ"},
+            {"command": "location", "description": "Save location / Lưu địa điểm"},
+            {"command": "subscribe", "description": "Daily briefing on / Bật bản tin sáng"},
+            {"command": "unsubscribe", "description": "Daily briefing off / Tắt bản tin sáng"},
             {"command": "menu",    "description": "Menu / Mở danh mục"},
             {"command": "weather", "description": "Weather / Dự báo thời tiết"},
             {"command": "aqi",     "description": "Air quality / Chất lượng không khí"},
@@ -91,6 +100,11 @@ class TelegramInteractiveBot(BasePostgresLoader):
 
     def _register_handlers(self) -> None:
         self.bot.message_handler(commands=["start"])(self.cmd_start)
+        self.bot.message_handler(commands=["language"])(self.cmd_language)
+        self.bot.message_handler(commands=["briefing"])(self.cmd_briefing)
+        self.bot.message_handler(commands=["location"])(self.cmd_location)
+        self.bot.message_handler(commands=["subscribe"])(self.cmd_subscribe)
+        self.bot.message_handler(commands=["unsubscribe"])(self.cmd_unsubscribe)
         self.bot.message_handler(commands=["menu"])(self.cmd_menu)
         self.bot.message_handler(commands=["weather"])(self.cmd_weather)
         self.bot.message_handler(commands=["aqi"])(self.cmd_aqi)
@@ -98,6 +112,8 @@ class TelegramInteractiveBot(BasePostgresLoader):
         self.bot.callback_query_handler(func=lambda c: c.data == "main_menu")(self.cb_main_menu)
         self.bot.callback_query_handler(func=lambda c: c.data == "sel_weather")(self.cb_sel_weather)
         self.bot.callback_query_handler(func=lambda c: c.data == "sel_aqi")(self.cb_sel_aqi)
+        self.bot.callback_query_handler(func=lambda c: c.data == "sel_home")(self.cb_select_home)
+        self.bot.callback_query_handler(func=lambda c: c.data and c.data.startswith(f"home{_CB_SEP}"))(self.cb_save_home)
         self.bot.callback_query_handler(func=lambda c: c.data.startswith(f"weather{_CB_SEP}"))(self.cb_sel_time_weather)
         self.bot.callback_query_handler(func=lambda c: c.data.startswith(f"show_wx{_CB_SEP}"))(self.cb_show_weather)
         self.bot.callback_query_handler(func=lambda c: c.data.startswith(f"aqi{_CB_SEP}"))(self.cb_show_aqi)
@@ -113,13 +129,14 @@ class TelegramInteractiveBot(BasePostgresLoader):
         if lang == "en":
             kb.add(
                 InlineKeyboardButton("Weather Forecast", callback_data="sel_weather"),
-                InlineKeyboardButton("Air Quality (AQI)", callback_data="sel_aqi"),
+                InlineKeyboardButton("Air Quality (PM2.5)", callback_data="sel_aqi"),
             )
         else:
             kb.add(
                 InlineKeyboardButton("Dự Báo Thời Tiết", callback_data="sel_weather"),
                 InlineKeyboardButton("Chất Lượng Không Khí", callback_data="sel_aqi"),
             )
+        kb.add(InlineKeyboardButton("Save Location" if lang == "en" else "Lưu địa điểm", callback_data="sel_home"))
         return kb
 
     def _kb_cities(self, action: str, lang: str) -> InlineKeyboardMarkup:
@@ -136,20 +153,20 @@ class TelegramInteractiveBot(BasePostgresLoader):
     def _kb_districts(self, action: str, city: str, lang: str) -> InlineKeyboardMarkup:
         kb = InlineKeyboardMarkup(row_width=2)
         buttons = []
-        for d in self.districts:
-            if d["db_name"].startswith(f"{city} "):
-                buttons.append(InlineKeyboardButton(d["label"], callback_data=f"{action}{_CB_SEP}{d['db_name']}"))
+        for location, label in self.districts.items():
+            if location.startswith(f"{city} "):
+                buttons.append(InlineKeyboardButton(label, callback_data=f"{action}{_CB_SEP}{location}"))
         kb.add(*buttons)
         btn_text = "<< Back to Cities" if lang == "en" else "<< Chọn Thành Phố"
         kb.add(InlineKeyboardButton(btn_text, callback_data=f"sel_{action}"))
         return kb
 
     def _kb_after_result(self, db_name: str, current_action: str, lang: str) -> InlineKeyboardMarkup:
-        other  = "aqi" if current_action == "weather" else "weather"
+        other = "aqi" if current_action == "weather" else "weather"
         city_prefix = db_name.split(" ")[0]
         kb = InlineKeyboardMarkup(row_width=1)
         if lang == "en":
-            o_label = "Air Quality (AQI)" if other == "aqi" else "Weather Forecast"
+            o_label = "Air Quality (PM2.5)" if other == "aqi" else "Weather Forecast"
             kb.add(
                 InlineKeyboardButton(f"View {o_label} here", callback_data=f"{other}{_CB_SEP}{db_name}"),
                 InlineKeyboardButton("<< Select Another District", callback_data=f"city{_CB_SEP}{current_action}{_CB_SEP}{city_prefix}"),
@@ -194,7 +211,7 @@ class TelegramInteractiveBot(BasePostgresLoader):
                                             callback_data=f"show_wx{_CB_SEP}{limit}{_CB_SEP}{offset-limit}{_CB_SEP}{db_name}"))
         
         # Open-Meteo allows up to 7 days forecast, so offset < 72 is safe
-        if offset < 72:
+        if offset + limit <= 72:
             nav_buttons.append(InlineKeyboardButton("Next >>" if lang == "en" else "Xem tiếp >>", 
                                             callback_data=f"show_wx{_CB_SEP}{limit}{_CB_SEP}{offset+limit}{_CB_SEP}{db_name}"))
             
@@ -203,7 +220,7 @@ class TelegramInteractiveBot(BasePostgresLoader):
             
         if lang == "en":
             kb.add(
-                InlineKeyboardButton("Air Quality (AQI)", callback_data=f"aqi{_CB_SEP}{db_name}"),
+                InlineKeyboardButton("Air Quality (PM2.5)", callback_data=f"aqi{_CB_SEP}{db_name}"),
                 InlineKeyboardButton("<< Select Timeframe", callback_data=f"weather{_CB_SEP}{db_name}"),
                 InlineKeyboardButton("<< Main Menu", callback_data="main_menu"),
             )
@@ -237,7 +254,33 @@ class TelegramInteractiveBot(BasePostgresLoader):
     # HANDLERS
     # ================================================================
 
+    def _resolve_location(self, key: str) -> str | None:
+        if key.isascii() and key.isdecimal():
+            index = int(key)
+            if index >= len(self.legacy_districts):
+                return None
+            key = self.legacy_districts[index]["db_name"]
+        return key if key in self.districts else None
+
+    def _private_only(self, message, lang: str) -> bool:
+        if message.chat.type == "private":
+            return True
+        prompt = "Open a private chat with this bot." if lang == "en" else "Mở cuộc trò chuyện riêng với bot."
+        self.bot.send_message(message.chat.id, prompt)
+        return False
+
     def cmd_start(self, message) -> None:
+        if message.chat.type == "private":
+            try:
+                location = self.db.get_home_location(message.chat.id)
+            except psycopg2.Error:
+                location = None
+            if location in self.districts:
+                self._send_briefing(message.chat.id, location, self._get_lang(message.chat.id))
+                return
+        self.cmd_language(message)
+
+    def cmd_language(self, message) -> None:
         name = message.from_user.first_name or "there"
         kb = InlineKeyboardMarkup(row_width=2)
         kb.add(
@@ -250,10 +293,90 @@ class TelegramInteractiveBot(BasePostgresLoader):
             reply_markup=kb,
         )
 
+    def cmd_location(self, message) -> None:
+        lang = self._get_lang(message.chat.id)
+        if self._private_only(message, lang):
+            text = "Choose the city for your saved point." if lang == "en" else "Chọn thành phố của điểm muốn lưu."
+            self.bot.send_message(message.chat.id, text, reply_markup=self._kb_cities("home", lang))
+
+    def cmd_briefing(self, message) -> None:
+        chat_id = message.chat.id
+        lang = self._get_lang(chat_id)
+        if not self._private_only(message, lang):
+            return
+        try:
+            location = self.db.get_home_location(chat_id)
+        except psycopg2.Error:
+            text = "Could not load your saved location." if lang == "en" else "Chưa đọc được địa điểm đã lưu."
+        else:
+            if location in self.districts:
+                self._send_briefing(chat_id, location, lang)
+                return
+            text = "Save a location with /location." if lang == "en" else "Lưu địa điểm bằng /location."
+        self.bot.send_message(chat_id, text, reply_markup=self._kb_main(lang))
+
+    def _send_briefing(self, chat_id, location, lang):
+        try:
+            text = self.formatter.fmt_briefing(location, self.db.query_briefing(location), lang)
+        except psycopg2.Error:
+            text = "The briefing is temporarily unavailable." if lang == "en" else "Bản tin tạm thời chưa có."
+        self.bot.send_message(chat_id, text, reply_markup=self._kb_main(lang))
+
+    def _set_subscription(self, message, enabled: bool) -> None:
+        chat_id = message.chat.id
+        lang = self._get_lang(chat_id)
+        if not self._private_only(message, lang):
+            return
+        en = lang == "en"
+        try:
+            updated = self.db.set_subscription(chat_id, enabled)
+        except psycopg2.Error:
+            text = "Could not update your subscription." if en else "Chưa lưu được tùy chọn bản tin."
+        else:
+            if enabled and not updated:
+                text = "Save a location with /location first." if en else "Hãy lưu địa điểm bằng /location trước."
+            elif enabled:
+                text = "Daily morning briefing enabled." if en else "Đã bật bản tin mỗi sáng."
+            else:
+                text = "Daily briefing disabled." if en else "Đã tắt bản tin mỗi sáng."
+        self.bot.send_message(chat_id, text)
+
+    def cmd_subscribe(self, message) -> None:
+        self._set_subscription(message, True)
+
+    def cmd_unsubscribe(self, message) -> None:
+        self._set_subscription(message, False)
+
+    def cb_select_home(self, call) -> None:
+        lang = self._get_lang(call.message.chat.id)
+        if call.message.chat.type != "private":
+            self.bot.answer_callback_query(call.id, text="Open a private chat / Mở chat riêng")
+            return
+        self.bot.answer_callback_query(call.id)
+        text = "Choose the city for your saved point." if lang == "en" else "Chọn thành phố của điểm muốn lưu."
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, self._kb_cities("home", lang))
+
+    def cb_save_home(self, call) -> None:
+        chat_id = call.message.chat.id
+        lang = self._get_lang(chat_id)
+        location = self._resolve_location(call.data.split(_CB_SEP, 1)[1])
+        if location is None or call.message.chat.type != "private":
+            self.bot.answer_callback_query(call.id, text="Choose a valid point in a private chat.")
+            return
+        try:
+            self.db.set_home_location(chat_id, location)
+        except psycopg2.Error:
+            self.bot.answer_callback_query(call.id, text="Could not save / Chưa lưu được.")
+            return
+        self.bot.answer_callback_query(call.id)
+        text = (f"Saved {location}. Use /briefing to view it or /subscribe to opt in."
+                if lang == "en" else f"Đã lưu {location}. Dùng /briefing để xem, /subscribe để nhận mỗi sáng.")
+        self._safe_edit_message(text, chat_id, call.message.message_id, self._kb_main(lang))
+
     def cmd_menu(self, message) -> None:
         lang = self._get_lang(message.chat.id)
-        text = "Select a feature:\n(Type /start to change language or view full guide)" if lang == "en" \
-               else "Chọn một chức năng:\n(Gõ /start để đổi ngôn ngữ hoặc xem hướng dẫn)"
+        text = "Select a feature:\n(Type /language to change language or view full guide)" if lang == "en" \
+               else "Chọn một chức năng:\n(Gõ /language để đổi ngôn ngữ hoặc xem hướng dẫn)"
         self.bot.send_message(message.chat.id, text, reply_markup=self._kb_main(lang))
 
     def cmd_weather(self, message) -> None:
@@ -263,11 +386,14 @@ class TelegramInteractiveBot(BasePostgresLoader):
 
     def cmd_aqi(self, message) -> None:
         lang = self._get_lang(message.chat.id)
-        text = "AIR QUALITY INDEX\nSelect a city:" if lang == "en" else "CHẤT LƯỢNG KHÔNG KHÍ\nChọn thành phố:"
+        text = "AIR QUALITY FORECAST\nSelect a city:" if lang == "en" else "CHẤT LƯỢNG KHÔNG KHÍ\nChọn thành phố:"
         self.bot.send_message(message.chat.id, text, reply_markup=self._kb_cities("aqi", lang))
 
     def cb_set_lang(self, call) -> None:
         _, lang = call.data.split(_CB_SEP, 1)
+        if lang not in {"en", "vi"}:
+            self.bot.answer_callback_query(call.id)
+            return
         self._set_lang(call.message.chat.id, lang)
         self.bot.answer_callback_query(call.id, text="Language saved!" if lang == "en" else "Đã lưu ngôn ngữ!")
         
@@ -284,8 +410,8 @@ class TelegramInteractiveBot(BasePostgresLoader):
     def cb_main_menu(self, call) -> None:
         self.bot.answer_callback_query(call.id)
         lang = self._get_lang(call.message.chat.id)
-        text = "Select a feature:\n(Type /start to change language or view full guide)" if lang == "en" \
-               else "Chọn một chức năng:\n(Gõ /start để đổi ngôn ngữ hoặc xem hướng dẫn)"
+        text = "Select a feature:\n(Type /language to change language or view full guide)" if lang == "en" \
+               else "Chọn một chức năng:\n(Gõ /language để đổi ngôn ngữ hoặc xem hướng dẫn)"
         self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_main(lang))
 
     def cb_sel_weather(self, call) -> None:
@@ -297,101 +423,76 @@ class TelegramInteractiveBot(BasePostgresLoader):
     def cb_sel_aqi(self, call) -> None:
         self.bot.answer_callback_query(call.id)
         lang = self._get_lang(call.message.chat.id)
-        text = "AIR QUALITY INDEX\nSelect a city:" if lang == "en" else "CHẤT LƯỢNG KHÔNG KHÍ\nChọn thành phố:"
+        text = "AIR QUALITY FORECAST\nSelect a city:" if lang == "en" else "CHẤT LƯỢNG KHÔNG KHÍ\nChọn thành phố:"
         self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_cities("aqi", lang))
 
     def cb_show_districts(self, call) -> None:
+        parts = call.data.split(_CB_SEP)
+        if len(parts) != 3:
+            self.bot.answer_callback_query(call.id)
+            return
+        _, action, city = parts
+        city_entry = next((choice for choice in self.cities if choice["id"] == city), None)
+        if action not in {"weather", "aqi", "home"} or city_entry is None:
+            self.bot.answer_callback_query(call.id)
+            return
         self.bot.answer_callback_query(call.id)
         lang = self._get_lang(call.message.chat.id)
-        _, action, city = call.data.split(_CB_SEP)
-        feature = "WEATHER" if action == "weather" else "AQI"
-        feature_vn = "DỰ BÁO THỜI TIẾT" if action == "weather" else "CHẤT LƯỢNG KHÔNG KHÍ"
-        
-        city_label = city
-        for c in self.cities:
-            if c["id"] == city:
-                city_label = c["label_en"] if lang == "en" else c["label_vi"]
-                break
-                
-        text = f"{feature} - {city_label}\nSelect a district:" if lang == "en" else f"{feature_vn} - {city_label}\nChọn quận/huyện:"
-        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_districts(action, city, lang))
+        city_label = city_entry["label_en"] if lang == "en" else city_entry["label_vi"]
+        text = f"{city_label} · Select a location" if lang == "en" else f"{city_label} · Chọn một địa điểm"
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id,
+                                self._kb_districts(action, city, lang))
 
     def cb_sel_time_weather(self, call) -> None:
-        self.bot.answer_callback_query(call.id)
         lang = self._get_lang(call.message.chat.id)
-        _, db_name = call.data.split(_CB_SEP, 1)
-        
-        # Handle backward compat for db_name if needed
-        if db_name.isdigit():
-            idx = int(db_name)
-            if idx < len(self.districts):
-                db_name = self.districts[idx]["db_name"]
-            else:
-                self.bot.answer_callback_query(call.id, text="Lỗi dữ liệu nút bấm cũ.")
-                return
-                
-        district = next((d for d in self.districts if d["db_name"] == db_name), None)
-        if not district:
+        location = self._resolve_location(call.data.split(_CB_SEP, 1)[1])
+        if location is None:
             self.bot.answer_callback_query(call.id, text="Khu vực không tồn tại.")
             return
-
-        text = f"Select forecast duration for {district['label']}:" if lang == "en" else f"Chọn mốc thời gian dự báo cho {district['label']}:"
-        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_time_options(db_name, lang))
+        self.bot.answer_callback_query(call.id)
+        label = self.districts[location]
+        text = f"Select forecast duration for {label}:" if lang == "en" else f"Chọn mốc dự báo cho {label}:"
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id,
+                                self._kb_time_options(location, lang))
 
     def cb_show_weather(self, call) -> None:
+        try:
+            _, span, skip, key = call.data.split(_CB_SEP, 3)
+            limit, offset = int(span), int(skip)
+            location = self._resolve_location(key)
+            if limit not in {6, 12, 24} or not 0 <= offset <= 72 or not location:
+                raise ValueError
+        except ValueError:
+            self.bot.answer_callback_query(call.id, text="Khu vực hoặc thời gian không hợp lệ.")
+            return
+        self.bot.answer_callback_query(call.id)
         lang = self._get_lang(call.message.chat.id)
-        _, limit_str, offset_str, db_name = call.data.split(_CB_SEP, 3)
-        limit = int(limit_str)
-        offset = int(offset_str)
-        
-        district = next((d for d in self.districts if d["db_name"] == db_name), None)
-        if not district:
-            self.bot.answer_callback_query(call.id, text="Khu vực không tồn tại.")
-            return
-        
-        self.bot.answer_callback_query(call.id, text=f"Loading {district['label']}..." if lang == "en" else f"Đang tải {district['label']}...")
-
-        rows = self.db.query_weather(db_name, limit, offset)
-        if not rows:
-            city = db_name.split(" ")[0]
-            not_found = f"No weather data found for {district['label']}.\nPlease try again later." if lang == "en" \
-                        else f"Không tìm thấy dữ liệu thời tiết cho {district['label']}.\nVui lòng thử lại sau."
-            self._safe_edit_message(not_found, call.message.chat.id, call.message.message_id, reply_markup=self._kb_time_options(db_name, lang))
-            return
-
-        text = self.formatter.fmt_weather(district["label"], rows, lang, limit, offset)
-        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_after_result_wx(db_name, limit, offset, lang))
+        try:
+            rows = self.db.query_weather(location, limit, offset)
+        except psycopg2.Error:
+            rows = []
+        if rows:
+            text = self.formatter.fmt_weather(location, rows, lang, limit, offset)
+            keyboard = self._kb_after_result_wx(location, limit, offset, lang)
+        else:
+            text = "No current forecast available." if lang == "en" else "Chưa có dự báo thời tiết mới."
+            keyboard = self._kb_time_options(location, lang)
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, keyboard)
 
     def cb_show_aqi(self, call) -> None:
-        lang = self._get_lang(call.message.chat.id)
-        _, db_name = call.data.split(_CB_SEP, 1)
-        
-        if db_name.isdigit():
-            idx = int(db_name)
-            if idx < len(self.districts):
-                district = self.districts[idx]
-                db_name = district["db_name"]
-            else:
-                self.bot.answer_callback_query(call.id, text="Lỗi dữ liệu nút bấm cũ, vui lòng quay lại menu.")
-                return
-        else:
-            district = next((d for d in self.districts if d["db_name"] == db_name), None)
-            if not district:
-                self.bot.answer_callback_query(call.id, text="Khu vực không tồn tại.")
-                return
-        
-        self.bot.answer_callback_query(call.id, text=f"Loading {district['label']}..." if lang == "en" else f"Đang tải {district['label']}...")
-
-        row = self.db.query_aqi(db_name)
-        if not row:
-            city = db_name.split(" ")[0]
-            not_found = f"No AQI data found for {district['label']}.\nPlease try again later." if lang == "en" \
-                        else f"Không tìm thấy dữ liệu AQI cho {district['label']}.\nVui lòng thử lại sau."
-            self._safe_edit_message(not_found, call.message.chat.id, call.message.message_id, reply_markup=self._kb_districts("aqi", city, lang))
+        location = self._resolve_location(call.data.split(_CB_SEP, 1)[1])
+        if location is None:
+            self.bot.answer_callback_query(call.id, text="Khu vực không tồn tại.")
             return
-
-        text = self.formatter.fmt_aqi(district["label"], row, lang)
-        self._safe_edit_message(text, call.message.chat.id, call.message.message_id, reply_markup=self._kb_after_result(db_name, "aqi", lang))
+        self.bot.answer_callback_query(call.id)
+        lang = self._get_lang(call.message.chat.id)
+        try:
+            row = self.db.query_aqi(location)
+        except psycopg2.Error:
+            row = None
+        text = self.formatter.fmt_aqi(location, row, lang)
+        self._safe_edit_message(text, call.message.chat.id, call.message.message_id,
+                                self._kb_after_result(location, "aqi", lang))
 
     def run(self) -> None:
         logger.info("Telegram Interactive Bot is running...")

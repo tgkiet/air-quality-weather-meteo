@@ -1,6 +1,6 @@
 # dbt-transform/ — Transform Layer (Silver & Gold)
 
-> Toàn bộ logic **Transform** trong chuỗi ELT. Biến đổi JSON thô từ Bronze thành bảng phẳng, sạch, sẵn sàng cho BI. Sử dụng **dbt 1.9.0** với `dbt-postgres` tích hợp trực tiếp vào Airflow container.
+> Toàn bộ logic **Transform** trong chuỗi ELT. Biến đổi JSON thô từ Bronze thành bảng phẳng, sạch, sẵn sàng cho BI. dbt Core và adapter PostgreSQL được cài trong Airflow image theo `requirements_airflow.txt`.
 
 ---
 
@@ -67,29 +67,11 @@ CAST(raw_json->'hourly'->'temperature_2m'->>(t.idx::int - 1) AS NUMERIC) AS temp
 
 ## 2. Silver Layer (INCREMENTAL)
 
-```sql
--- DISTINCT ON lấy bản forecast mới nhất cho mỗi giờ/location
-SELECT DISTINCT ON (forecast_time, latitude, longitude)
-    *
-FROM (
-    SELECT * FROM {{ ref('stg_weather_hourly') }}
-    UNION ALL
-    SELECT * FROM {{ ref('stg_historical_weather') }}
-)
-{% if is_incremental() %}
-    {% if var('execution_date', none) %}
-        WHERE execution_date = '{{ var("execution_date") }}'::timestamptz
-    {% else %}
-        WHERE execution_date >= (SELECT COALESCE(max(execution_date), '1900-01-01'::timestamptz) FROM {{ this }})
-    {% endif %}
-{% endif %}
-ORDER BY forecast_time, latitude, longitude, execution_date DESC
-```
+- Airflow truyền `execution_date` để dbt chỉ xử lý batch của DAG run đó. Khi chạy tay không truyền giá trị này, dbt xử lý các bản ghi có mốc batch từ mốc lớn nhất hiện có trong Silver.
+- Khóa của một dòng gồm giờ hiệu lực và tọa độ điểm tra cứu. Trong cùng nguồn, batch gần nhất được giữ lại. Nếu hai batch có cùng mốc lịch, lần nạp sau được ưu tiên. Khi dự báo và dữ liệu hồi cứu trùng giờ, Silver giữ bản dự báo. Dữ liệu hồi cứu vẫn nằm ở Bronze.
+- PostgreSQL kiểm tra điều kiện trên khi cập nhật từng khóa. Chạy lại batch cũ có thể thêm giờ còn thiếu mà không ghi đè bản mới. Mốc nạp ở bảng Gold là mốc đưa dữ liệu vào Bronze, không phải giờ mô hình được phát hành.
 
-**Logic giải thích:**
-- `execution_date DESC` → DISTINCT ON giữ bản dự báo **mới nhất** cho mỗi (giờ, vị trí)
-- **Orchestrator-Driven Incremental Pattern**: Dùng `var('execution_date')` tiêm trực tiếp từ Airflow vào dbt. Logic này giúp dbt CHỈ xử lý đúng dữ liệu của lần chạy hiện tại, tránh lãng phí reprocess batch cũ (khắc phục nhược điểm của `>=`) mà vẫn đảm bảo an toàn Idempotency tuyệt đối (kể cả khi Airflow Clear Task). Fallback về `>=` khi chạy tay local.
-- dbt `unique_key = ['forecast_time', 'latitude', 'longitude']` → MERGE đúng
+Sau khi nâng phiên bản, các cột provenance của dòng Silver cũ có thể còn trống. Chạy full refresh sau khi sao lưu để tính lại chúng từ dữ liệu Bronze còn lưu. Nếu chỉ nạp một khoảng lịch sử đến muộn, chạy full refresh để đưa cả khoảng đó lên Silver và Gold.
 
 ---
 
@@ -111,9 +93,9 @@ LEFT JOIN air_quality aq
 
 | Cột | Logic |
 |---|---|
-| `temperature_level` | CASE: Mát mẻ(<20) / Dễ chịu(20-28) / Nóng(28-35) / Rất nóng(35-38) / Nguy hiểm(≥38) |
+| `temperature_level` | CASE: Mát mẻ(<20) / Dễ chịu(20–<30) / Nóng(30–<35) / Rất nóng(35–<40) / Nguy hiểm(≥40) |
 | `uv_level` | CASE: Thấp(<3) / Trung bình(3-6) / Cao(6-8) / Rất cao(8-11) / Cực kỳ nguy hiểm(≥11) |
-| `pm2_5_level` | AQI Mỹ: Tốt(<12) / Trung bình(12-35) / Không lành mạnh(35-55) / Rất không lành mạnh(55-150) / Nguy hiểm |
+| `pm2_5_level` | Ngưỡng nội bộ theo µg/m³: Tốt(<12) / Trung bình(12-35) / Không lành mạnh(35-55) / Rất không lành mạnh(55-150) / Nguy hiểm |
 | `is_weather_alert` | TRUE nếu temp≥38°C HOẶC (UV IS NOT NULL AND UV≥8). **KHÔNG BAO GIỜ NULL.** |
 | `is_air_quality_alert` | TRUE nếu PM2.5≥55. NULL khi ngoài tầm CAMS forecast (~ngày 6-7). |
 
@@ -175,6 +157,6 @@ dbt test --select slv_weather_hourly \
 | `profiles.yml` mount read-only (`ro`) | Bảo mật — không để Airflow container ghi đè credentials |
 | `generate_schema_name.sql` macro override | Tránh schema xấu kiểu `silver_layer_gold_layer` |
 | Gold `is_air_quality_alert` nullable | NULL ≠ FALSE — phân biệt "không có data" với "không alert" |
-| Native Index Toàn Diện (`+indexes`) | Tạo 4 bộ Index vật lý cho bảng Gold ngay khi build table. Tối ưu toàn diện: `(forecast_time)` & `(forecast_time_local)` cho Superset/BI, Compound `(location_name, forecast_time)` cho Telegram Bot (<1ms), `(lat, lon)` cho Geospatial. Dùng Native thay cho `post-hook` để đảm bảo idempotent và an toàn. |
+| Native Index Toàn Diện (`+indexes`) | Tạo 4 bộ Index vật lý cho bảng Gold ngay khi build table. Tối ưu toàn diện: `(forecast_time)` & `(forecast_time_local)` cho Superset/BI, Compound `(location_name, forecast_time)` cho Telegram Bot, `(lat, lon)` cho Geospatial. Dùng Native thay cho `post-hook` để đảm bảo idempotent và an toàn. |
 | Giữ các cờ cảnh báo `is_weather_alert` tĩnh (hardcode) | Cờ tĩnh ở Data Mart chuyên phục vụ vẽ Dashboard Superset. Cảnh báo linh hoạt của Push Bot được decouple hoàn toàn và cấu hình qua file JSON. |
 | Xóa magic numbers tọa độ ở Staging | Tọa độ chuẩn (requested_lat/lon) đã được tiêm (inject) từ Python ở tầng Extract. dbt không cần gánh trách nhiệm sửa lỗi Grid Snapping của API nữa. |

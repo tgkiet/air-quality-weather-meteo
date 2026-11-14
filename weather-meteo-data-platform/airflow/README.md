@@ -1,6 +1,6 @@
 # airflow/ — Orchestration Layer
 
-> **Apache Airflow 3.2.0** điều phối toàn bộ pipeline theo lịch `@hourly`, đảm bảo Idempotency qua `logical_date`, tự động retry và báo lỗi.
+> **Apache Airflow 3.4.0** điều phối toàn bộ pipeline theo lịch `@hourly`, đảm bảo Idempotency qua `logical_date`, tự động retry và báo lỗi.
 
 ---
 

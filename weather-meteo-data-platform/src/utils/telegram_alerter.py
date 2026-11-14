@@ -1,65 +1,53 @@
-"""
-telegram_alerter.py - Module chịu trách nhiệm tương tác với Telegram Bot API.
-Tuân thủ OOP và thiết kế Separation of Concerns (Tách biệt trách nhiệm).
-"""
+"""Send forecast messages through Telegram's Bot API."""
 
 import os
+
 import requests
+
 from src.utils.logger import get_logger
 
 logger = get_logger("TelegramAlerter")
 
+
+class TelegramDeliveryError(RuntimeError):
+    """The API did not acknowledge successful delivery."""
+
+    def __init__(self, message: str, *, retryable: bool = False):
+        super().__init__(message)
+        self.retryable = retryable
+
+
 class TelegramAlerter:
-    """
-    Class quản lý việc gửi tin nhắn cảnh báo qua Telegram.
-    Lấy thông tin xác thực từ Environment Variables (không hardcode).
-    """
-
     def __init__(self):
-        # 1. Lấy thông tin từ Biến Môi Trường (Environment Variables)
-        self.bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        token = os.environ.get("TELEGRAM_BOT_TOKEN")
         self.chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-
-        # 2. Fail-Fast: Kiểm tra ngay từ đầu, thiếu thì báo lỗi ngay.
-        if not self.bot_token or not self.chat_id:
-            logger.error("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in environment.")
+        if not token or not self.chat_id:
             raise ValueError("Telegram credentials are not fully configured.")
+        self.base_url = f"https://api.telegram.org/bot{token}"
 
-        # 3. Khởi tạo Base URL của Telegram API
-        self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
-
-    def send_message(self, message: str) -> bool:
-        """
-        Gửi một tin nhắn text thuần túy đến Chat ID đã được cấu hình.
-        
-        Args:
-            message (str): Nội dung cảnh báo cần gửi.
-            
-        Returns:
-            bool: True nếu gửi thành công, False nếu thất bại.
-        """
-        url = f"{self.base_url}/sendMessage"
-        
-        # Payload data theo chuẩn REST API của Telegram
-        payload = {
-            "chat_id": self.chat_id,
-            "text": message,
-            "parse_mode": "HTML"
-        }
+    def send_message(self, message: str, *, chat_id=None, parse_mode="HTML") -> None:
+        payload = {"chat_id": self.chat_id if chat_id is None else chat_id, "text": message}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
 
         try:
-            # Gửi HTTP POST request với timeout để tránh bị treo hệ thống
-            response = requests.post(url, data=payload, timeout=10)
-            
-            # Kiểm tra HTTP Status Code (200 là thành công)
-            if response.status_code == 200:
-                logger.info("Telegram alert sent successfully.")
-                return True
-            else:
-                logger.error(f"Failed to send Telegram alert. Status: {response.status_code}, Response: {response.text}")
-                return False
-                
-        except requests.exceptions.RequestException as e:
-            # Bắt lỗi mạng (Network Error, Timeout, DNS Fail...)
-            logger.error(f"Network error while sending Telegram alert: {e}")
-            return False
+            response = requests.post(f"{self.base_url}/sendMessage", data=payload, timeout=10)
+        except requests.exceptions.ConnectTimeout:
+            # Requests documents ConnectTimeout as safe to retry.
+            raise TelegramDeliveryError("Telegram connection timed out", retryable=True) from None
+        except requests.exceptions.RequestException:
+            # Request exception messages can contain the URL with the bot token.
+            logger.warning("Telegram network error; delivery status unknown.")
+            raise TelegramDeliveryError("Telegram delivery status unknown") from None
+
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+        if response.status_code == 200 and isinstance(body, dict) and body.get("ok") is True:
+            return
+        if 400 <= response.status_code < 500 and isinstance(body, dict) and body.get("ok") is False:
+            raise TelegramDeliveryError(
+                f"Telegram rejected message (HTTP {response.status_code})", retryable=True,
+            )
+        raise TelegramDeliveryError(f"Telegram delivery status unknown (HTTP {response.status_code})")

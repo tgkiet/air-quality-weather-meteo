@@ -96,10 +96,10 @@ Models dbt trong `models/marts/`:
 │                                                                      │
 │  ┌─────────────────────────┐       ┌──────────────────────────────┐ │
 │  │    postgres_container   │       │      airflow_container       │ │
-│  │    (postgres:16-alpine) │◄──────│  (Custom: airflow:3.2.0 +   │ │
+│  │    (postgres:16.16-alpine) │◄──────│  (Custom: airflow:3.4.0 +   │ │
 │  │                         │       │   psycopg2 + requests + ...) │ │
 │  │  Port: 5432 (internal)  │       │                              │ │
-│  │  Port: 5434 (host)      │       │  Port: 8080 (host & cont.)  │ │
+│  │  Port: 5434 (loopback)      │       │  Port: 8080 (host & cont.)  │ │
 │  │                         │       │                              │ │
 │  │  Volumes:               │       │  Processes:                  │ │
 │  │  - postgres_data (named)│       │  - airflow scheduler         │ │

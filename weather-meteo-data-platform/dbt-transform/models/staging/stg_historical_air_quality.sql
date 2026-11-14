@@ -21,7 +21,8 @@ WITH source_data AS (
         ozone_cams                                AS ozone,
         aerosol_optical_depth_cams                AS aerosol_optical_depth,
         dust_cams                                 AS dust,
-        aq_uv_index_cams                          AS uv_index
+        aq_uv_index_cams                          AS uv_index,
+        ingested_at
     FROM {{ source('meteo_bronze', 'bronze_historical_weather') }}
 )
 
@@ -41,5 +42,9 @@ SELECT
     ozone,
     aerosol_optical_depth,
     dust,
-    uv_index
+    uv_index,
+    ingested_at,
+    'historical'::text AS data_source,
+    NULL::numeric AS model_latitude,
+    NULL::numeric AS model_longitude
 FROM source_data

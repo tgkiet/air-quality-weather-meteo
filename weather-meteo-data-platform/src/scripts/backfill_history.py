@@ -375,7 +375,8 @@ class HistoricalBackfiller(BasePostgresLoader):
                 dust_cams              = EXCLUDED.dust_cams,
                 aq_uv_index_cams       = EXCLUDED.aq_uv_index_cams,
                 location_id            = EXCLUDED.location_id,
-                location_name          = EXCLUDED.location_name;
+                location_name          = EXCLUDED.location_name,
+                ingested_at             = NOW();
         """
         # Explicit template cast ::TIMESTAMP AT TIME ZONE 'Asia/Bangkok'
         # → Postgres chuyển giờ địa phương về TIMESTAMPTZ (UTC base) đúng chuẩn

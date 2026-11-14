@@ -25,6 +25,10 @@ Lớp cha cung cấp các hành vi dùng chung cho tất cả các Loader kết 
 
 Chuyên trách việc tải dữ liệu JSON thô nhận từ các API Extractor vào bảng raw `api_openmeteo_raw_data`.
 
+### Ghi một batch dự báo
+
+`load_forecast_batch(execution_date, weather, air_quality)` ghi cả hai nguồn trong cùng transaction. `execution_date` là khóa batch, còn `ingested_at` là lúc ghi thành công gần nhất.
+
 ### Hàm `insert_data(table_name, source_type, execution_date, raw_json)`
 * **Idempotency (Tính lũy đẳng):** Sử dụng mệnh đề `ON CONFLICT (source_type, execution_date) DO UPDATE SET raw_json = EXCLUDED.raw_json` để đảm bảo khi chạy lại một mẻ dữ liệu của Airflow (cùng logical execution date), hệ thống sẽ cập nhật đè lên bản ghi cũ chứ không tạo bản ghi trùng lặp.
 * **Chống SQL Injection:** Sử dụng `psycopg2.sql.Identifier` để bảo vệ tên bảng khỏi các lỗ hổng chèn ép SQL.

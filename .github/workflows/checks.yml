@@ -1,0 +1,39 @@
+name: Project checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: weather-meteo-data-platform
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate Compose and startup scripts
+        run: |
+          docker compose --env-file .env.example config --quiet
+          for script in airflow/start.sh src/scripts/init_dbs.sh tests/verify_*.sh; do
+            bash -n "$script"
+          done
+      - name: Build the Airflow image
+        run: docker build --tag meteo-checks:ci .
+      - name: Run offline Python tests
+        run: |
+          docker run --rm --network none \
+            --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
+            --workdir /workspace --entrypoint python3 \
+            -e RUNNING_IN_DOCKER=true -e PYTHONDONTWRITEBYTECODE=1 \
+            meteo-checks:ci -m unittest discover -s tests -v
+      - name: Verify the warehouse on a clean database
+        run: bash tests/verify_warehouse.sh meteo-checks:ci postgres:16.16-alpine
+      - name: Start Airflow and validate the DAG and FAB admin
+        run: bash tests/verify_airflow.sh meteo-checks:ci postgres:16.16-alpine

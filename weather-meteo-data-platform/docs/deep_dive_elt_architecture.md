@@ -232,7 +232,7 @@ Khi gửi batch 52 tọa độ, nếu 2 Quận nằm quá sát nhau (VD: Quận 
 
 Nếu dùng thuật toán đo khoảng cách (Euclidean Nearest-Neighbor), cả 2 kết quả trả về sẽ bị gán nhầm cho cùng 1 Quận (Quận nào có khoảng cách gần hơn sẽ "cướp" luôn kết quả của Quận kia). Kết quả là Quận 1 bị duplicate 2 dòng, còn Quận 3 thì mất tích hoàn toàn dữ liệu!
 
-Để giải quyết triệt để, `_inject_location_metadata()` trong `main.py` khai thác đặc điểm của Open-Meteo: **Thứ tự mảng trả về luôn khớp tuyệt đối 100% với thứ tự tọa độ gửi lên.**
+Để giải quyết triệt để, `_inject_location_metadata()` trong `main.py` khai thác đặc điểm của Open-Meteo: Pipeline ghép phản hồi batch theo thứ tự yêu cầu và kiểm tra số lượng. Tọa độ nguồn được giữ để đối chiếu.
 ```python
 # Chấp nhận việc API snap tọa độ, ta chỉ cần gộp (zip) đúng vị trí Index:
 for item, loc in zip(items, locations):
@@ -388,9 +388,9 @@ postgres_container
   - Mount: init_dbs.sh → /docker-entrypoint-initdb.d/ (chạy 1 lần khi khởi tạo)
 
 airflow_container
-  - Image: custom (Dockerfile: python3.13 + Airflow 3.2.0 + dbt-postgres 1.9.0)
+  - Image: custom (Dockerfile: python3.13 + Airflow 3.4.0 + dbt-postgres 1.11.0)
   - Depends on: postgres_container (healthcheck)
-  - Mount: src/, dbt-transform/, profiles.yml (read-only), Open-Meteo-Dataset/
+  - Mount: src/, dbt-transform/, profiles.yml (read-only), airflow/dags/, airflow/logs/
   - Network: meteo_network (nội bộ, Airflow gọi DB bằng hostname "postgres_db")
 ```
 

@@ -2,35 +2,34 @@ import psycopg2
 from contextlib import contextmanager
 import psycopg2.extras
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from src.utils.logger import get_logger
 
 logger = get_logger("BotServices")
+FRESHNESS_HOURS = 3
 
-_TEMP_LEVEL_EN = {
-    "Nguy hiểm": "Dangerous",
-    "Rất nóng":  "Very Hot",
-    "Nóng":      "Hot",
-    "Dễ chịu":   "Comfortable",
-    "Mát mẻ":    "Cool",
-    "Chưa có dữ liệu": "N/A",
-}
-_UV_LEVEL_EN = {
-    "Cực kỳ nguy hiểm": "Extreme",
-    "Rất cao":           "Very High",
-    "Cao":               "High",
-    "Trung bình":        "Moderate",
-    "Thấp":              "Low",
-    "Chưa có dữ liệu":   "N/A",
-}
-_PM25_LEVEL_EN = {
-    "Nguy hiểm":            "Hazardous",
-    "Rất không lành mạnh": "Very Unhealthy",
-    "Không lành mạnh":     "Unhealthy",
-    "Trung bình":           "Moderate",
-    "Tốt":                  "Good",
-    "Chưa có dữ liệu":      "N/A",
-}
+# Each metric must match its own forecast batch in Bronze. This also supports
+# warehouses that have not yet rebuilt Gold with its new provenance columns.
+WEATHER_BATCH_JOIN = """
+    LEFT JOIN public.api_openmeteo_raw_data AS weather_batch
+           ON weather_batch.source_type = 'weather_forecast_hourly'
+          AND weather_batch.execution_date = g.execution_date
+"""
+AQ_BATCH_JOIN = """
+    LEFT JOIN silver_layer.slv_air_quality_hourly AS aq
+           ON (aq.forecast_time, aq.latitude, aq.longitude) =
+              (g.forecast_time, g.latitude, g.longitude)
+    LEFT JOIN public.api_openmeteo_raw_data AS aq_batch
+           ON aq_batch.id = aq.raw_id AND aq_batch.execution_date = aq.execution_date
+          AND aq_batch.source_type = 'air_quality_hourly'
+"""
+WEATHER_FRESH = f"""(
+    weather_batch.ingested_at >= now() - interval '{FRESHNESS_HOURS} hours'
+    AND weather_batch.execution_date >= now() - interval '{FRESHNESS_HOURS} hours'
+)"""
+AQ_FRESH = f"""(
+    aq_batch.ingested_at >= now() - interval '{FRESHNESS_HOURS} hours'
+    AND aq_batch.execution_date >= now() - interval '{FRESHNESS_HOURS} hours'
+)"""
 
 class BotDatabaseManager:
     """Handles all database interactions for the Telegram Bot."""
@@ -50,7 +49,8 @@ class BotDatabaseManager:
                 user=self.loader.db_user,
                 password=self.loader.db_password,
                 host=self.loader.db_host,
-                port=self.loader.db_port
+                port=self.loader.db_port,
+                connect_timeout=5,
             )
             yield conn
         except Exception as e:
@@ -106,66 +106,88 @@ class BotDatabaseManager:
         except Exception as e:
             logger.error(f"Error saving user lang: {e}")
 
+    def get_home_location(self, chat_id: int) -> str | None:
+        with self.get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT home_location FROM silver_layer.bot_user_preferences WHERE chat_id = %s",
+                (chat_id,),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+
+    def set_home_location(self, chat_id: int, location: str) -> None:
+        with self.get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO silver_layer.bot_user_preferences (chat_id, home_location)
+                VALUES (%s, %s)
+                ON CONFLICT (chat_id) DO UPDATE
+                SET home_location = EXCLUDED.home_location, updated_at = NOW()
+            """, (chat_id, location))
+            conn.commit()
+
+    def set_subscription(self, chat_id: int, enabled: bool) -> bool:
+        with self.get_db_connection() as conn, conn.cursor() as cur:
+            cur.execute("""
+                UPDATE silver_layer.bot_user_preferences
+                SET daily_briefing = %s, updated_at = NOW()
+                WHERE chat_id = %s AND home_location IS NOT NULL
+            """, (enabled, chat_id))
+            updated = cur.rowcount == 1
+            conn.commit()
+            return updated
+
     def query_weather(self, db_name: str, limit: int = 6, offset: int = 0) -> list:
-        try:
-            sql = """
-                SELECT
-                    forecast_time,
-                    temperature_2m,
-                    apparent_temperature,
-                    precipitation_probability,
-                    precipitation,
-                    wind_speed_10m,
-                    wind_gusts_10m,
-                    cloud_cover,
-                    weather_uv_index,
-                    uv_level,
-                    temperature_level
-                FROM gold_layer.mart_hourly_conditions
-                WHERE location_name = %s
-                  AND forecast_time >= NOW() + CAST(%s AS INTERVAL)
-                ORDER BY forecast_time ASC
-                LIMIT %s;
-            """
-            with self.get_db_connection() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                    interval_str = f"{offset} hours" if offset > 0 else "-1 hours"
-                    cur.execute(sql, (db_name, interval_str, limit))
-                    rows = cur.fetchall()
-            
-            # Loại bỏ cơ chế slicing (rows[::2], rows[::4]) theo yêu cầu
-            # để hiển thị đầy đủ chi tiết từng giờ.
-            return rows
-        except Exception as e:
-            logger.error(f"Error query_weather: {e}")
-            return []
+        with self.get_db_connection() as conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute(f"""
+                SELECT g.forecast_time, g.temperature_2m, g.precipitation_probability,
+                       g.precipitation, g.wind_speed_10m, g.weather_uv_index,
+                       weather_batch.ingested_at
+                FROM gold_layer.mart_hourly_conditions AS g
+                {WEATHER_BATCH_JOIN}
+                WHERE g.location_name = %s AND {WEATHER_FRESH}
+                  AND g.forecast_time >= NOW() + %s * interval '1 hour'
+                  AND g.forecast_time < NOW() + (%s + %s) * interval '1 hour'
+                ORDER BY g.forecast_time;
+            """, (db_name, offset, offset, limit))
+            return cur.fetchall()
 
     def query_aqi(self, db_name: str) -> dict | None:
-        try:
-            sql = """
-                SELECT
-                    forecast_time,
-                    pm2_5,
-                    pm10,
-                    pm2_5_level,
-                    nitrogen_dioxide,
-                    ozone,
-                    is_air_quality_alert
-                FROM gold_layer.mart_hourly_conditions
-                WHERE location_name = %s
-                  AND pm2_5 IS NOT NULL
-                  AND forecast_time <= NOW() + INTERVAL '1 hour'
-                ORDER BY forecast_time DESC
+        with self.get_db_connection() as conn, conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(f"""
+                SELECT aq.forecast_time, aq.pm2_5, aq.pm10, aq.nitrogen_dioxide, aq.ozone,
+                       aq_batch.ingested_at,
+                       COALESCE({AQ_FRESH} AND aq.forecast_time >= now() - interval '2 hours', FALSE) AS fresh
+                FROM silver_layer.slv_air_quality_hourly AS aq
+                LEFT JOIN public.api_openmeteo_raw_data AS aq_batch
+                       ON aq_batch.id = aq.raw_id AND aq_batch.execution_date = aq.execution_date
+                      AND aq_batch.source_type = 'air_quality_hourly'
+                WHERE aq.location_name = %s
+                  AND aq.forecast_time >= NOW() - interval '24 hours'
+                  AND aq.forecast_time <= NOW() + interval '1 hour'
+                ORDER BY fresh DESC, (aq.pm2_5 IS NOT NULL) DESC, aq.forecast_time DESC
                 LIMIT 1;
-            """
-            with self.get_db_connection() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                    cur.execute(sql, (db_name,))
-                    row = cur.fetchone()
-                    return dict(row) if row else None
-        except Exception as e:
-            logger.error(f"Error query_aqi: {e}")
-            return None
+            """, (db_name,))
+            return cur.fetchone()
+
+    def query_briefing(self, db_name: str) -> list:
+        with self.get_db_connection() as conn, conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(f"""
+                SELECT g.forecast_time,
+                       g.forecast_time < now() + interval '6 hours' AS within_6h,
+                       CASE WHEN {WEATHER_FRESH} THEN g.temperature_2m END AS temperature_2m,
+                       CASE WHEN {WEATHER_FRESH} THEN g.precipitation END AS precipitation,
+                       CASE WHEN {WEATHER_FRESH} THEN g.precipitation_probability END AS precipitation_probability,
+                       CASE WHEN {WEATHER_FRESH} THEN weather_batch.ingested_at END AS weather_ingested_at,
+                       CASE WHEN {AQ_FRESH} THEN aq.pm2_5 END AS pm2_5,
+                       CASE WHEN {AQ_FRESH} THEN aq_batch.ingested_at END AS aq_ingested_at
+                FROM gold_layer.mart_hourly_conditions AS g
+                {WEATHER_BATCH_JOIN}
+                {AQ_BATCH_JOIN}
+                WHERE g.location_name = %s AND g.forecast_time >= NOW()
+                  AND g.forecast_time < NOW() + interval '24 hours'
+                ORDER BY g.forecast_time;
+            """, (db_name,))
+            return cur.fetchall()
 
 
 class BotFormatter:
@@ -176,150 +198,94 @@ class BotFormatter:
         self.pm25_alert_threshold = pm25_alert_threshold
         self.bkk_tz = bkk_tz
 
+    def _hour(self, value: datetime) -> str:
+        return value.astimezone(self.bkk_tz).strftime("%H:%M %d/%m/%Y")
+
+    def fmt_briefing(self, label: str, rows: list, lang: str) -> str:
+        en = lang == "en"
+        title = f"24-HOUR BRIEFING · {label}" if en else f"BẢN TIN 24 GIỜ · {label}"
+        missing = "Insufficient current forecast data" if en else "Chưa đủ dữ liệu dự báo mới"
+        weather_times = [r["weather_ingested_at"] for r in rows if r["weather_ingested_at"]]
+        aq_times = [r["aq_ingested_at"] for r in rows if r["aq_ingested_at"]]
+
+        rain = [r for r in rows if r["within_6h"] and r["precipitation"] is not None
+                and r["precipitation_probability"] is not None]
+        temperatures = [r["temperature_2m"] for r in rows if r["temperature_2m"] is not None]
+        pm25 = [r for r in rows if r["pm2_5"] is not None]
+
+        rain_label = "Rain (6h)" if en else "Mưa (6 giờ)"
+        temp_label = "Temperature (24h)" if en else "Nhiệt độ (24 giờ)"
+        pm25_label = "Peak PM2.5 (24h)" if en else "PM2.5 cao nhất (24 giờ)"
+        rain_summary = missing
+        if rain:
+            peak = max(rain, key=lambda r: (r["precipitation"], r["precipitation_probability"]))
+            rain_summary = f'{peak["precipitation"]:.1f} mm, {peak["precipitation_probability"]}% · {self._hour(peak["forecast_time"])}'
+        temp_summary = f"{min(temperatures):.1f}–{max(temperatures):.1f} °C" if temperatures else missing
+        pm25_summary = missing
+        if pm25:
+            peak = max(pm25, key=lambda r: r["pm2_5"])
+            pm25_summary = f'{peak["pm2_5"]:.1f} µg/m³ · {self._hour(peak["forecast_time"])}'
+        updated = "Latest fetch" if en else "Lấy dữ liệu gần nhất"
+        hour_count = "h" if en else "giờ"
+        lines = [
+            title,
+            f"{rain_label}: {rain_summary} ({len(rain)}/6 {hour_count})",
+            f"{temp_label}: {temp_summary} ({len(temperatures)}/24 {hour_count})",
+            f"{pm25_label}: {pm25_summary} ({len(pm25)}/24 {hour_count})",
+        ]
+        if weather_times:
+            lines.append(f"Open-Meteo · {updated} {self._hour(max(weather_times))}")
+        if aq_times:
+            lines.append(f"Open-Meteo/CAMS · {updated} {self._hour(max(aq_times))}")
+        return "\n".join(lines)
+
     def fmt_weather(self, label: str, rows: list, lang: str, limit: int = 6, offset: int = 0) -> str:
-        now = datetime.now(self.bkk_tz).strftime("%H:%M  %d/%m/%Y")
-        sep = "─" * 32
-        
-        time_desc_en = f"Next {limit} hours"
-        time_desc_vi = f"{limit} giờ tới"
-        if offset > 0:
-            time_desc_en = f"Hours +{offset} to +{offset+limit}"
-            time_desc_vi = f"Dự báo từ giờ thứ {offset} đến {offset+limit}"
-        
-        title = f"WEATHER FORECAST · {label.upper()}\nUpdated {now}  |  {time_desc_en}\n{sep}" if lang == "en" else \
-                f"DỰ BÁO THỜI TIẾT · {label.upper()}\nCập nhật {now}  |  {time_desc_vi}\n{sep}"
-        lines = [title]
+        en = lang == "en"
+        fetched_at = self._hour(max(row["ingested_at"] for row in rows))
+        period = f"+{offset}–{offset + limit} h" if en else f"+{offset}–{offset + limit} giờ"
+        title = f"WEATHER FORECAST · {label}" if en else f"DỰ BÁO THỜI TIẾT · {label}"
+        updated = "Fetched" if en else "Lấy dữ liệu lúc"
+        lines = [title, f"Open-Meteo · {updated} {fetched_at} · {period} · {len(rows)}/{limit}"]
 
-
-        for r in rows:
-            ft = r["forecast_time"]
-            if ft.tzinfo is not None:
-                ft = ft.astimezone(self.bkk_tz)
-            t_str = ft.strftime("%H:%M (%d/%m)")
-            temp  = float(r["temperature_2m"])
-            feels = float(r["apparent_temperature"]) if r["apparent_temperature"] is not None else temp
-            prob  = int(r["precipitation_probability"])
-            rain  = float(r["precipitation"])
-            wind  = float(r["wind_speed_10m"]) if r["wind_speed_10m"] is not None else 0.0
-            uv    = float(r["weather_uv_index"]) if r["weather_uv_index"] is not None else 0.0
-            cloud = int(r["cloud_cover"]) if r["cloud_cover"] is not None else 0
-
-            if lang == "en":
-                tmp_lv = _TEMP_LEVEL_EN.get(r["temperature_level"] or "", r["temperature_level"] or "N/A")
-                uv_lv  = _UV_LEVEL_EN.get(r["uv_level"] or "", r["uv_level"] or "N/A")
-                
-                if rain > 0:
-                    if rain >= self.rain_mm_threshold and prob >= self.rain_prob_threshold:
-                        rain_desc, alert = "Heavy rain / Flood risk", " [!! ALERT !!]"
-                        rain_icon = "⛈️"
-                    elif rain >= self.rain_mm_threshold:
-                        rain_desc, alert = "Widespread rain", ""
-                        rain_icon = "🌧️"
-                    else:
-                        rain_desc, alert = "Local showers / Thunderstorms", ""
-                        rain_icon = "🌦️"
-                    rain_text = f"{rain_icon} {rain_desc} ({rain:.1f} mm) | Chance of rain: {prob}%{alert}"
-                else:
-                    rain_text = "🌤️ No rain expected"
-                
-                lines += [
-                    f"\n{t_str}",
-                    f"  Temp : {temp:.1f}C (Feels {feels:.1f}C) [{tmp_lv}]",
-                    f"  Rain : {rain_text}",
-                    f"  Misc : Wind {wind:.1f} km/h | Cloud {cloud}% | UV {uv:.1f} ({uv_lv})"
-                ]
+        for row in rows:
+            timestamp = row["forecast_time"].astimezone(self.bkk_tz).strftime("%H:%M %d/%m")
+            temp = f'{row["temperature_2m"]:.1f} °C' if row["temperature_2m"] is not None else "N/A"
+            rain = row["precipitation"]
+            prob = row["precipitation_probability"]
+            if rain is None or prob is None:
+                rain_text = "Rain N/A" if en else "Mưa N/A"
             else:
-                tmp_lv = r["temperature_level"] or "N/A"
-                uv_lv  = r["uv_level"] or "N/A"
-
-                if rain > 0:
-                    if rain >= self.rain_mm_threshold and prob >= self.rain_prob_threshold:
-                        rain_desc, alert = "Mưa rất lớn / Nguy cơ ngập", " [!! CẢNH BÁO !!]"
-                        rain_icon = "⛈️"
-                    elif rain >= self.rain_mm_threshold:
-                        rain_desc, alert = "Mưa diện rộng", ""
-                        rain_icon = "🌧️"
-                    else:
-                        rain_desc, alert = "Mưa rào / Dông cục bộ", ""
-                        rain_icon = "🌦️"
-                    rain_text = f"{rain_icon} {rain_desc} ({rain:.1f} mm) | Tỉ lệ có mưa: {prob}%{alert}"
-                else:
-                    rain_text = "🌤️ Không mưa"
-                
-                lines += [
-                    f"\n{t_str}",
-                    f"  Nhiệt độ: {temp:.1f}C (Cảm giác {feels:.1f}C) [{tmp_lv}]",
-                    f"  Mưa     : {rain_text}",
-                    f"  Khác    : Gió {wind:.1f} km/h | Mây {cloud}% | UV {uv:.1f} ({uv_lv})"
-                ]
-                
-        lines.append(f"\n{sep}")
-        if lang == "en":
-            lines.append(f"* Heavy Rain Alert triggers when Volume > {self.rain_mm_threshold:.1f} mm and Chance of rain >= {self.rain_prob_threshold}%")
-        else:
-            lines.append(f"* Cảnh báo Mưa lớn kích hoạt khi Lượng mưa > {self.rain_mm_threshold:.1f} mm và Tỉ lệ có mưa >= {self.rain_prob_threshold}%")
-            
+                label = "Rain" if en else "Mưa"
+                rain_text = f"{label} {rain:.1f} mm · {prob}%"
+                if rain >= self.rain_mm_threshold and prob >= self.rain_prob_threshold:
+                    rain_text += " · Alert" if en else " · Cảnh báo"
+            wind = f'{row["wind_speed_10m"]:.1f} km/h' if row["wind_speed_10m"] is not None else "N/A"
+            uv = f'{row["weather_uv_index"]:.1f}' if row["weather_uv_index"] is not None else "N/A"
+            wind_label = "Wind" if en else "Gió"
+            lines.append(f"{timestamp} · {temp} · {rain_text} · {wind_label} {wind} · UV {uv}")
         return "\n".join(lines)
 
     def fmt_aqi(self, label: str, row: dict, lang: str) -> str:
-        now      = datetime.now(self.bkk_tz).strftime("%H:%M  %d/%m/%Y")
-        ft = row["forecast_time"]
-        if ft.tzinfo is not None:
-            ft = ft.astimezone(self.bkk_tz)
-        obs_time = ft.strftime("%H:%M (%d/%m)")
-        pm25     = float(row["pm2_5"])
-        pm10     = float(row["pm10"])             if row["pm10"]             is not None else None
-        no2      = float(row["nitrogen_dioxide"]) if row["nitrogen_dioxide"] is not None else None
-        o3       = float(row["ozone"])            if row["ozone"]            is not None else None
-        is_alert = row["is_air_quality_alert"]
+        en = lang == "en"
+        title = f"AIR QUALITY FORECAST · {label}" if en else f"DỰ BÁO CHẤT LƯỢNG KHÔNG KHÍ · {label}"
+        source = "Model forecast: Open-Meteo / CAMS" if en else "Nguồn dự báo mô hình: Open-Meteo / CAMS"
+        if row is None or row["pm2_5"] is None:
+            return f'{title}\n{source}\n' + ("No PM2.5 forecast available." if en else "Chưa có dự báo PM2.5.")
+        valid_at = self._hour(row["forecast_time"])
+        valid = f"Forecast for {valid_at}" if en else f"Dự báo lúc {valid_at}"
+        if not row["fresh"]:
+            stale = "Forecast is stale." if en else "Dữ liệu đã cũ."
+            return f"{title}\n{source}\n{valid}\n{stale}"
 
-        if lang == "en":
-            level = _PM25_LEVEL_EN.get(row["pm2_5_level"] or "", row["pm2_5_level"] or "N/A")
-            if is_alert is None:
-                status, advice = "[No forecast data]", "AQI data is not yet available."
-            elif is_alert:
-                status, advice = "[!! AIR QUALITY ALERT !!]", "Limit outdoor activities. Wear an N95 mask."
-            else:
-                status, advice = "[Safe]", "Air quality is within safe limits for outdoor activities."
-                
-            lines = [
-                f"AIR QUALITY INDEX · {label.upper()}",
-                f"Data as of {obs_time} | Updated {now}",
-                "─" * 34,
-                f"PM2.5   : {pm25:.1f} µg/m³  (Alert >= {self.pm25_alert_threshold:.0f})",
-            ]
-            if pm10 is not None: lines.append(f"PM10    : {pm10:.1f} µg/m³")
-            if no2 is not None:  lines.append(f"NO2     : {no2:.1f} µg/m³")
-            if o3 is not None:   lines.append(f"Ozone   : {o3:.1f} µg/m³")
-            lines += [
-                f"Level   : {level}",
-                f"Status  : {status}",
-                f"Advice  : {advice}",
-            ]
-        else:
-            level = row["pm2_5_level"] or "N/A"
-            if is_alert is None:
-                status, advice = "[Chưa có dữ liệu]", "Dữ liệu AQI chưa sẵn sàng."
-            elif is_alert:
-                status, advice = "[!! CẢNH BÁO Ô NHIỄM !!]", "Hạn chế ra ngoài. Rất nên đeo khẩu trang N95."
-            else:
-                status, advice = "[An toàn]", "Chất lượng không khí tốt, yên tâm sinh hoạt ngoài trời."
-                
-            lines = [
-                f"CHẤT LƯỢNG KHÔNG KHÍ · {label.upper()}",
-                f"Dữ liệu lúc {obs_time} | Cập nhật {now}",
-                "─" * 34,
-                f"PM2.5   : {pm25:.1f} µg/m³  (Cảnh báo >= {self.pm25_alert_threshold:.0f})",
-            ]
-            if pm10 is not None: lines.append(f"PM10    : {pm10:.1f} µg/m³")
-            if no2 is not None:  lines.append(f"NO2     : {no2:.1f} µg/m³")
-            if o3 is not None:   lines.append(f"Ozone   : {o3:.1f} µg/m³")
-            lines += [
-                f"Mức độ  : {level}",
-                f"Trạng thái: {status}",
-                f"Khuyến nghị: {advice}",
-            ]
-            
+        fetched_at = self._hour(row["ingested_at"])
+        fetched = f"Fetched {fetched_at}" if en else f"Lấy dữ liệu lúc {fetched_at}"
+        pm25 = row["pm2_5"]
+        lines = [title, source, f"{valid} · {fetched}", f"PM2.5: {pm25:.1f} µg/m³"]
+        for key, name in (("pm10", "PM10"), ("nitrogen_dioxide", "NO₂"), ("ozone", "O₃")):
+            if row[key] is not None:
+                lines.append(f"{name}: {row[key]:.1f} µg/m³")
+        if pm25 >= self.pm25_alert_threshold:
+            lines.append("PM2.5 is above the alert threshold." if en else "PM2.5 đạt ngưỡng cảnh báo.")
         return "\n".join(lines)
 
     def get_guide_text(self, lang: str, name: str) -> str:
@@ -329,14 +295,17 @@ class BotFormatter:
                 "==========================================\n"
                 "WEATHER & AIR QUALITY FORECAST BOT\n"
                 "==========================================\n\n"
-                "Automated Weather & AQI Data System.\n"
+                "Automated weather and air-quality forecasts.\n"
                 "Powered by an ELT Pipeline (Airflow, dbt, PostgreSQL).\n"
                 "Data sources: Open-Meteo API & CAMS.\n"
                 "Developed by: gkinhere.\n\n"
                 "COMMANDS\n"
                 "  /weather   Weather forecast\n"
-                "  /aqi       Air quality index\n"
-                "  /start     Show this guide & language settings\n\n"
+                "  /aqi       PM2.5 forecast\n"
+                "  /briefing  Saved location’s 24-hour forecast\n"
+                "  /location  Save a location\n"
+                "  /subscribe · /unsubscribe  Daily briefing\n"
+                "  /language  Change language\n\n"
                 "Select a feature to get started:"
             )
         else:
@@ -345,13 +314,16 @@ class BotFormatter:
                 "==========================================\n"
                 "BOT DỰ BÁO THỜI TIẾT & CHẤT LƯỢNG KHÔNG KHÍ\n"
                 "==========================================\n\n"
-                "Hệ thống cung cấp dữ liệu Thời Tiết & AQI tự động.\n"
+                "Hệ thống cung cấp dữ liệu dự báo thời tiết và chất lượng không khí tự động.\n"
                 "Vận hành qua kiến trúc ELT Pipeline (Airflow, dbt, PostgreSQL).\n"
                 "Nguồn dữ liệu: Open-Meteo API & Mô hình CAMS.\n"
                 "Phát triển bởi: gkinhere.\n\n"
                 "CÁC LỆNH\n"
                 "  /weather   Dự báo thời tiết\n"
                 "  /aqi       Chất lượng không khí\n"
-                "  /start     Đổi ngôn ngữ & xem hướng dẫn\n\n"
+                "  /briefing  Bản tin 24 giờ cho khu vực đã lưu\n"
+                "  /location  Lưu khu vực\n"
+                "  /subscribe · /unsubscribe  Bản tin mỗi sáng\n"
+                "  /language  Đổi ngôn ngữ\n\n"
                 "Chọn chức năng bên dưới để bắt đầu:"
             )
